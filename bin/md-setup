@@ -513,10 +513,8 @@ base)
 		panic $? "Failed to make directory: $MonkeyDevPath"
 
 	#下载一些基础文件和模板文件
-	#https://codeload.github.com/kokoabim/iOSOpenDev/tar.gz/master
-	#https://codeload.github.com/kokoabim/iOSOpenDev-Xcode-Templates/tar.gz/master
-	downloadGithubTarball "https://codeload.github.com/kokoabim/iOSOpenDev/tar.gz/master" "$MonkeyDevPath" "MonkeyDev base"
-	downloadGithubTarball "https://codeload.github.com/kokoabim/iOSOpenDev-Xcode-Templates/tar.gz/master" "$MonkeyDevPath/templates" "Xcode templates"
+	downloadGithubTarball "https://codeload.github.com/AloneMonkey/MonkeyDev/tar.gz/master" "$MonkeyDevPath" "MonkeyDev base"
+	downloadGithubTarball "https://codeload.github.com/AloneMonkey/MonkeyDev-Xcode-Templates/tar.gz/master" "$MonkeyDevPath/templates" "Xcode templates"
 
 	#创建空的frameworks目录
 	mkdir -p "$MonkeyDevPath/frameworks" || \
