@@ -1,0 +1,1898 @@
+#!/bin/bash
+
+export setCmd="set -eo pipefail"
+$setCmd
+
+export PATH=/opt/MonkeyDev/bin:/opt/theos/bin:/usr/local/bin:/usr/bin:/usr/sbin:/bin:/sbin:$PATH
+
+export scriptName="${0##*/}"
+export scriptVer="1.5"
+export originalArguments=("$@")
+export activeActionArg
+
+export MonkeyDevPath="/opt/MonkeyDev"
+
+export userName="${SUDO_USER-$USER}"
+export userGroup=`id -g $userName`
+export userHome=`eval echo ~$userName`
+export bashProfileFiles=("$userHome/.zshrc" "$userHome/.bash_profile" "$userHome/.bashrc" "$userHome/.bash_login" "$userHome/.profile")
+
+export tempDirsFile="`mktemp -d -t $scriptName`/tempdirs"
+touch "$tempDirsFile"
+
+unset LANG
+
+xcodeAsAppPath=`xcode-select -p`
+[[ ! -d "$xcodeAsAppPath" ]] || \
+	export DEVELOPER_DIR="$xcodeAsAppPath"
+
+export ActionNames=( \
+	"SignCode" \
+	"BuildPackage" "InstallPackage" "RemovePackage" "PurgePackage" \
+	"SshToDevice" "RunCmdOnDevice" "RunFuncOnDevice" \
+	"UpdateIncludeAndLib" \
+	"DumpSDKHeaders" "CopyHeadersToSDK" "DumpAndCopyHeaders" "RemoveCopiedHeaders" "DumpAllHeaders" \
+	"AddSshKeyToDevice" \
+	"XcodeBuildPhase" "XcodeBuildPhaseLogos" "Help")
+export ActionProperty_ShortArg=0
+export ActionProperty_ShortUsage=1
+export ActionProperty_Options=2
+export ActionProperty_MinArgs=3
+export ActionProperty_MaxArgs=4
+export ActionProperty_Function=5
+export ActionProperty_RequireSudo=6
+export ActionProperty_LongUsage=7
+
+export Action_SignCode=("sign" "[-i identity] executable_file" "i:" 1 1 signCode false \
+"        Add code signature to <executable_file>. If <identity> is omitted,
+        ldid is used. If <identity> is provided, codesign is used and the
+        certificate of the matching digital identity in the Keychain is used.")
+
+export Action_BuildPackage=("build" "[-p version_plist] [-z] package_directory output_directory" "p:z" 2 2 buildPackage false \
+"        Build a Debian package using <package_directory> and place the package
+        in <output_directory>. If <version_plist> is provided, the plist will be
+        used to set the package's control file's Version field before building.
+        If <z> is provided, a zip file is created in <output_directory> also.")
+
+export Action_InstallPackage=("install" "[-h host_address] [-p host_port] package_file" "h:p:" 1 1 managePackageOnDevice false \
+"        Install <package_file> on device at <host_address>. If <host_address> is
+        omitted, the environment variable MonkeyDevDevice is used. If <host_port>
+        is omitted, the environment variable MonkeyDevPort is used or, if that
+        variable does not exist, the default SSH port 22 is used.")
+
+export Action_RemovePackage=("remove" "[-h host_address] [-p host_port] package_name" "h:p:" 1 1 managePackageOnDevice false \
+"        Remove <package_name> from device at <host_address>. If <host_address>
+        is omitted, the environment variable MonkeyDevDevice is used. If
+        <host_port> is omitted, the environment variable MonkeyDevPort is used
+        or, if that variable does not exist, the default SSH port 22 is used.")
+
+export Action_PurgePackage=("purge" "[-h host_address] [-p host_port] package_name" "h:p:" 1 1 managePackageOnDevice false \
+"        Purge <package_name> from device at <host_address>. If <host_address> is
+        omitted, the environment variable MonkeyDevDevice is used. If <host_port>
+        is omitted, the environment variable MonkeyDevPort is used or, if that
+        variable does not exist, the default SSH port 22 is used.")
+
+export Action_DumpSDKHeaders=("dump" "[-i] [-z] framework_type output_directory" "iz" 2 2 dumpSDKHeaders false \
+"        Generate header files of the specified iOS SDK <framework_type> of its
+        classes, categories and protocols in <output_directory>. If <z> is
+        omitted, class-dump-z is used. If <z> is used, class-dump is used. If
+        <i> is provided, import statements are not converted from \"header.h\"
+        to <framework_name/header.h>. All import statements, if the imported
+        header file exists in the framework being processed, are converted to
+        framework-style imports since the header files being dumped will be
+        copied to SDK directories. If <framework_type> is springboard then
+        import statements are not converted since the header files are placed
+        in an include directory.
+
+        Framework type options:
+            public, private, springboard
+
+        Outputted structure for public and private options:
+            <output_directory>/Foo.framework/Headers/*.h
+      
+        Outputted structure for springboard option:
+            <output_directory>/*.h")
+
+export Action_CopyHeadersToSDK=("cp2sdk" "[-t header_tag] framework_type source_directory" "t:" 2 2 copyHeadersToSDK true \
+"        Copy header files from <source_directory> to the location of the
+        specified iOS SDK <framework_type>, tagging each header file with
+        <header_tag>, if provided. Tagging is performed for distinguishability
+        between original and other dumped header files. If <framework_type> is
+        public and <header_tag> is empty, a header tag of \"_Dumped\" is used
+        so that original SDK header files are not overwritten.
+
+        Framework type options:
+            public, private, springboard
+
+        Valid source structures for public and private options:
+            <source_directory>/Foo.framework/Headers/*.h
+            <source_directory>/Foo.framework/*.h
+
+        Valid source structure for springboard option:
+            <source_directory>/*.h
+            
+        Location of public framework type:
+            \$SDKROOT/System/Library/Frameworks
+
+        Location of private framework type:
+            \$SDKROOT/System/Library/PrivateFrameworks
+
+        Location of springboard framework type:
+            $MonkeyDevPath/include/SpringBoard")
+
+export Action_DumpAndCopyHeaders=("dump2sdk" "[-i] [-z] [-t header_tag] framework_type" "it:z" 1 1 dumpAndCopyHeaders true \
+"        Generate and copy header files of the specified iOS SDK
+        <framework_type>, tagging each header file with <header_tag>, if
+        provided. If <z> is omitted, class-dump-z is used. If <z> is used,
+        class-dump is used. If <i> is provided, import statements are not
+        converted from \"header.h\" to <framework_name/header.h>.
+        
+        Using this would be as if the dump argument was used then followed by
+        the cp2sdk argument. Header files are outputted to a temporary
+        directory which is removed.
+
+        Framework type options:
+            public, private, springboard")
+          
+export Action_RemoveCopiedHeaders=("rmheaders" "framework_type header_tag" "" 2 2 removeCopiedHeaders true \
+"        Remove previously copied header files of the specified iOS SDK
+        <framework_type> which are tagged with <header_tag>.
+
+        Framework type options:
+            public or private")
+
+export Action_AddSshKeyToDevice=("sshkey" "[-h host_address] [-p host_port] [-r]" "h:rp:" 0 0 addSshKeyToDevice false \
+"        Add the local user's public SSH authentication key as an authorized key
+        to the root account of the device at <host_address>. If <host_address>
+        is omitted, the environment variable MonkeyDevDevice is used. If
+        <host_port> is omitted, the environment variable MonkeyDevPort is used
+        or, if that variable does not exist, the default SSH port 2222 is used. If
+        <r> is omitted, the current user is used. If <r> is used, root is used.
+        If the local user does not already have a SSH authentication key then
+        one will be generated and the passphrase to set for it will be asked.
+        Adding a user's public SSH authentication key as an authorized key will
+        allow public key authentication which requires no password upon log on
+        of SSH connections. This is required for Xcode Build Phases of projects
+        created from MonkeyDev templates to function. This should be performed
+        by the account that will be used for developing in Xcode. Public keys
+        are stored in the root account's ~/.ssh/authorized_keys file.")
+
+export Action_DumpAllHeaders=("dumpall2sdk" "[-i] [-z]" "iz" 0 0 dumpAllHeaders true \
+"        Generate and copy header files of the iOS SDK framework types public,
+        private and springboard. If <z> is omitted, class-dump-z is used. If
+        <z> is used, class-dump is used. If <i> is provided, import statements
+        are not converted from \"header.h\" to <framework_name/header.h>.")
+
+export Action_RunCmdOnDevice=("run" "[-h host_address] [-p host_port] command ..." "h:p:" 0 2048 runCmdOnDevice false \
+"        Run <command> on device at <host_address>. If <host_address> is
+        omitted, the environment variable MonkeyDevDevice is used. If
+        <host_port> is omitted, the environment variable MonkeyDevPort is
+        used or, if that variable does not exist, the default SSH port 22
+        is used.")
+
+export Action_RunFuncOnDevice=("func" "[-h host_address] [-p host_port] function" "h:p:" 1 1 runFuncOnDevice false \
+"        Perform <function> on device at <host_address>. If <host_address> is
+        is omitted, the environment variable MonkeyDevDevice is used. If
+        <host_port> is omitted, the environment variable MonkeyDevPort is used
+        or, if that variable does not exist, the default SSH port 22 is used.
+
+        Available functions:
+            respring, reboot")
+
+export Action_XcodeBuildPhaseLogos=("--xcbp-logos" "" "" 0 0 xcodeBuildPhase_Logos false \
+"        DO NOT USE. For use by Xcode as a Build Phase for projects created from
+        MonkeyDev templates only.")
+
+export Action_XcodeBuildPhase=("--xcbp" "" "" 0 0 xcodeBuildPhase false \
+"        DO NOT USE. For use by Xcode as a Build Phase for projects created from
+        MonkeyDev templates only.")
+
+export Action_SshToDevice=("ssh" "[-h host_address] [-p host_port]" "h:p:" 0 0 sshToDevice false \
+"        Secure Shell (SSH) to device at <host_address>. If <host_address> is
+        omitted, the environment variable MonkeyDevDevice is used. If
+        <host_port> is omitted, the environment variable MonkeyDevPort is used
+        or, if that variable does not exist, the default SSH port 2222 is used.")
+
+export Action_UpdateIncludeAndLib=("update" "[-h host_address] [-p host_port]" "h:p:" 0 0 updateIncludeAndLib false \
+"        Update include and lib directories using device at <host_address>.
+        If <host_address> is omitted, the environment variable
+        MonkeyDevDevice is used. If <host_port> is omitted, the environment
+        variable MonkeyDevPort is used or, if that variable does not exist,
+        the default SSH port 2222 is used.")
+
+export Action_Help=("--help" "" "" 0 0 "" false \
+"        Show this help.")
+
+function cleanup() # no args
+{
+	local exitCode=$?
+	set +e
+	trap - $signals
+	
+	removeTempData
+
+	exit $exitCode
+}
+export signals="0 1 2 3 15"
+trap cleanup $signals
+
+function panic() # args: exitCode, message...
+{
+	local exitCode=$1
+	set +e
+	
+	shift
+	[[ "$@" == "" ]] || \
+		echo "$@" >&2
+
+	exit $exitCode
+}
+
+function determineBashProfileFile()
+{
+	$setCmd
+
+	local f
+	local filePath
+	
+	for f in "${bashProfileFiles[@]}"; do
+		if [[ -f "$f" ]]; then
+            if [[ -n `perl -ne 'print $1 if /^(?:export)? *'"MonkeyDevPath"'=(.*)$/' "$f"` ]]; then
+    			filePath="$f"
+    			break
+            fi
+		fi
+	done
+	
+	if [[ $filePath == "" ]]; then
+
+		filePath="$bashProfileFiles" # use first array item
+		
+		touch "$filePath" || \
+			panic $? "Failed to touch $filePath"
+			
+		changeOwn "$userName:$userGroup" "$filePath"
+		changeMode 0600 "$filePath"
+	fi
+	
+	# return #
+	echo "$filePath"
+}
+
+function removeTempData() # no args
+{
+	local tempDirs
+	
+	if [[ -f "$tempDirsFile" ]]; then
+		tempDirs=(`cat "$tempDirsFile"`)
+		
+		for td in "${tempDirs[@]}"; do
+			rm -rf "$td" || true # forget abou' it.
+		done
+		
+		rm -rf "`dirname \"$tempDirsFile\"`" || true # forget abou' it.
+	fi
+}
+
+function requireDir() # args: dirPath [, makeDirIfNotFound]
+{
+	local dirPath="$1"
+	local makeDirIfNotFound="$2"
+				
+	if [[ ! -d "$dirPath" ]]; then
+		if [[ $makeDirIfNotFound == "true" ]]; then
+
+			mkdir -p "$dirPath" || \
+				panic $? "Failed to create directory $dirPath"
+				
+		else
+			panic 1 "Directory $dirPath not found"
+		fi
+	fi
+}
+
+function copyFile() # args: sourceFile, targetDirOrFile
+{
+	local sourceFile="$1"
+	local targetDirOrFile="$2"
+	
+	cp -fR "$sourceFile" "$targetDirOrFile" || \
+		panic $? "Failed to copy file $sourceFile to $targetDirOrFile"
+}
+
+function changeMode() # args: mode, target
+{
+	local mode="$1"
+	local target="$2"
+	
+	if [[ -e "$target" ]]; then
+	
+		chmod $mode "$target" || \
+			panic $? "Failed to change mode to $mode on $target"
+	fi
+}
+
+function changeOwn() # args: ownerAndOrGroup, target
+{
+	local ownerAndOrGroup="$1"
+	local target="$2"
+	
+	if [[ -e "$target" ]]; then
+	
+		chown "$ownerAndOrGroup" "$target" || \
+			panic $? "Failed to change ownership to $ownerAndOrGroup on $target"
+	fi
+}
+
+function requireFile() # args: filePath [, touchFileIfNotFound]
+{
+	local filePath="$1"
+	local touchFileIfNotFound="$2"
+	
+	if [[ ! -f "$filePath" ]]; then
+		if [[ $touchFileIfNotFound == "true" ]]; then
+
+			touch "$filePath" || \
+				panic $? "Failed to touch $filePath"
+				
+		else
+			panic 1 "File $filePath not found"
+		fi
+	fi
+}
+
+function requireExportedVariable() # args: envVarName[, message]
+{
+	local envVarName="$1"
+	local message="$2"
+	local value
+	
+	if [[ ${!envVarName} == "" ]]; then
+		value=`getBashProfileEnvVarValue "$envVarName"`
+	
+		[[ $value != "" ]] || \
+			panic 1 "Environment variable $envVarName is not set or is empty"
+
+		eval $envVarName='$value'
+		export $envVarName
+	fi
+}
+
+function createSymlink() # args: sourcePath, linkPath
+{
+	local sourcePath="$1"
+	local linkPath="$2"
+	
+	ln -fhs "$sourcePath" "$linkPath" || \
+		panic $? "Failed to create symbolic link $linkPath -> $sourcePath"
+}
+
+function extractTar() # args: tarPath, outputPath
+{
+	local tarPath="$1"
+	local outputPath="$2"
+	
+	tar -C "$outputPath" -zxf "$tarPath" || \
+		panic $? "Failed to extract $tarPath to $outputPath"
+}
+
+function copyFileToDevice() # args: sourceFile, targetDir, hostAddress, hostPort
+{
+	local sourceFile="$1"
+	local targetDir="$2"
+	local hostAddress="$3"
+	local hostPort="$4"
+	local targetFilePath
+	
+	ssh -p$hostPort root@$hostAddress mkdir -p "\"$targetDir\"" || \
+		panic $? "Failed to create directory $targetDir on device $hostAddress"
+	
+	targetFilePath="$targetDir/`basename \"$sourceFile\"`" || \
+		panic $? "Failed to build target file path"
+		
+	ssh -p$hostPort root@$hostAddress rm -f "\"$targetFilePath\"" || \
+		panic $? "Failed to remove existing file $targetFilePath on device $hostAddress"
+	
+	scp -P$hostPort "$sourceFile" root@$hostAddress:"\"$targetFilePath\"" || \
+		panic $? "Failed to copy file $sourceFile to device $hostAddress at directory $targetDir"
+}
+
+function getSdkProperty() # args: sdk, propertyName
+{
+	$setCmd
+
+	local sdk="$1"
+	local propertyName="$2"
+
+	propertyValue=`xcodebuild -version -sdk $sdk $propertyName` || \
+		panic $? "Failed to get $sdk SDK property $propertyName"
+		
+	# return #
+	echo "$propertyValue"
+}
+
+function getBashProfileEnvVarValue() # args: envVarName
+{
+	$setCmd
+
+	local envVarName="$1"
+	local perlValue
+	local bashProfileFile
+	
+	bashProfileFile=`determineBashProfileFile`
+	
+	perlValue=`perl -ne 'print $1 if /^(?:export)? *'"$envVarName"'=(.*)$/' "$bashProfileFile"` || \
+		panic $? "Failed to perl"
+	
+	# return #
+	echo "$perlValue"
+}
+
+function getTempDir() # no args
+{
+	$setCmd
+	
+	local tempDir
+	
+	tempDir=`mktemp -d -t $scriptName` || \
+		panic $? "Failed to create temporary directory"
+
+	# remember the temp dir path; in cleanup() these are rm'd #
+	
+	echo "$tempDir" >> "$tempDirsFile" || \
+		panic $? "Failed to echo into temporary file $tempDirsFile"
+
+	# return #
+	echo "$tempDir"
+}
+
+function downloadFile() # args: sourceUrl, targetPath
+{
+	local sourceUrl="$1"
+	local targetPath="$2"
+	local curlPath
+
+	requireDir "${targetPath%/*}" true
+
+	curlPath=`which curl` || \
+		panic $? "Failed to get curl path"
+
+	"$curlPath" --silent --insecure --output "$targetPath" "$sourceUrl" || \
+		panic $? "Failed to download $sourceUrl to $targetPath"
+}
+
+# === sign (action) === #
+function signCode() # args: executableToSign, identityToSignWith
+{
+	local executableToSign="$1"
+	local identityToSignWith="$2"
+	local cmdBin
+	local cmdArg
+	local codesignAllocatePath
+	local entitlements="$CODE_SIGN_ENTITLEMENTS"
+
+	# process arguments #
+	
+	requireFile "$executableToSign" false
+		
+	if [[ "$identityToSignWith" == "" || "$identityToSignWith" == "-" ]]; then
+
+		# use ldid #
+		cmdBin="ldid"
+		
+		if [[ "$entitlements" == "" ]]; then
+			cmdArg=("-S")
+		else
+			cmdArg=("-S${PROJECT_DIR}/${entitlements}")
+		fi
+
+	else
+		# use codesign #
+		codesignAllocatePath=`xcodebuild -sdk iphoneos -find codesign_allocate` || \
+			panic $? "Failed to get codesign_allocate path"
+
+		export CODESIGN_ALLOCATE="$codesignAllocatePath"
+
+		cmdBin=`xcodebuild -sdk iphoneos -find codesign` || \
+			panic $? "Failed to get codesign path"
+
+		if [[ "$entitlements" == "" ]]; then
+			cmdArg=("-fs" "$identityToSignWith")
+		else
+			cmdArg=("-fs" "$identityToSignWith" "--entitlements" "${PROJECT_DIR}/${entitlements}")
+		fi		
+	fi
+
+	echo -n "Signing $executableToSign with `basename \"$cmdBin\"`... "
+	
+	"$cmdBin" "${cmdArg[@]}" "$executableToSign" || \
+		panic $? "Failed."
+
+	# success #
+	echo "Done."
+}
+
+
+# === build (action) === #
+function readDefaultsValue() # args: plistPath, propertyName
+{
+	$setCmd
+	
+	local plistPath="$1"
+	local propertyName="$2"
+	local value
+	
+	value=`defaults read "${plistPath%.*}" "$propertyName"` || \
+		panic $? "Failed to read defaults property $propertyName from $plistPath"
+
+	# return #
+	echo "$value"
+}
+
+function getVersionFromVersionPList() # args: plistPath
+{
+	$setCmd
+	
+	local plistPath="$1"
+	local version
+	local major
+	local minor
+	local bugFix
+	local stage
+	local pkgRev
+	
+	major=`readDefaultsValue "$plistPath" "Major"`
+	minor=`readDefaultsValue "$plistPath" "Minor"`
+	bugFix=`readDefaultsValue "$plistPath" "BugFix"`
+	stage=`readDefaultsValue "$plistPath" "Stage"`
+	pkgRev=`readDefaultsValue "$plistPath" "PackageRevision"`
+
+	version="$major.$minor"
+		
+	[[ "$bugFix" == "" ]] || version+=".$bugFix"
+	[[ "$stage" == "" ]] || version+="$stage"
+	[[ "$pkgRev" == "" ]] || version+="-$pkgRev"
+		
+	# return #
+	echo "$version"
+}
+
+#给deb设置版本
+function setControlFileVersionFieldUsingVersionPList() # args: controlFile, plistPath
+{
+	local controlFile="$1"
+	local plistPath="$2"
+	local versionReadFromPList
+	
+	requireFile "$controlFile" false
+	requireFile "$plistPath" false
+	
+	# read plist to get version #
+	versionReadFromPList=`getVersionFromVersionPList "$plistPath"`
+	
+	[[ $versionReadFromPList != "" ]] || \
+		panic 1 "Failed to read version from $plistPath"
+
+	# write version to control file	#
+
+	echo -n "Setting control file $controlFile Version field to $versionReadFromPList using $plistPath... "
+
+	sed -i "" "s/Version:.*/Version: $versionReadFromPList/g" "$controlFile" || \
+		panic $? "Failed."
+
+	# success #
+	echo "Done."
+}
+
+function getControlFieldValue() # args: controlFile, fieldName [, isRequired]
+{
+	$setCmd
+	
+	local controlFile="$1"
+	local fieldName="$2"
+	local isRequired="$3"
+	local perlValue
+		
+	perlValue=`perl -ne 'print $1 if /^'"$fieldName"': *(.*) *$/' "$controlFile"` || \
+		panic $? "Failed perl command using $controlFile"
+
+	if [[ "$perlValue" == "" ]] && [[ "$isRequired" == "true" ]]; then
+		panic 1 "Missing control field: $fieldName"
+	fi
+	
+	# return #
+	echo "$perlValue"
+}
+
+
+function getPackageFileNameUsingControlFile() # args: controlFile
+{
+	$setCmd
+	
+	local controlFile="$1"
+	local pkgId
+	local pkgVer
+	local pkgArch
+		
+	pkgId=`getControlFieldValue "$controlFile" Package true`
+	pkgVer=`getControlFieldValue "$controlFile" Version true`
+	pkgArch=`getControlFieldValue "$controlFile" Architecture true`
+
+	# return #
+	echo "${pkgId}_${pkgVer}_${pkgArch}"
+}
+
+function buildPackage() # args: packageDir, outputDir, versionPList [, useZOption]
+{
+	local packageDir="$1"
+	local outputDir="$2"
+	local versionPList="$3"
+	local useZOption="$4"
+	local subFileControlTxtToRemove="$packageDir/DEBIAN/control.txt"
+	local subFilesToRemove=(".DS_Store" "0xdeadfa11")
+	local packageFileName
+	local packageName
+	local zipFileName
+	
+	echo "Preparing to build package..."
+	
+	# verify arguments #
+	requireDir "$packageDir"
+
+	requireDir "$outputDir" true
+
+	[[ "$versionPList" == "" ]] || \
+		requireFile "$versionPList" false
+
+	# cleanup #
+	[[ ! -f "$subFileControlTxtToRemove" ]] || \
+		rm -f "$subFileControlTxtToRemove" || \
+			panic $? "Failed to remove file $subFileControlTxtToRemove"
+	
+	for f in "${subFilesToRemove[@]}"; do
+		find "$packageDir" -type f -name "$f" -exec rm -f '{}' \; || \
+			panic $? "Failed to remove file $f"
+	done
+
+	#循环去除掉文件的@属性
+	xattr -crs "$packageDir" || true # forget abou' it (does not work on 10.6)
+
+	changeMode 0644 "$packageDir/DEBIAN/control"
+	changeMode 0755 "$packageDir/DEBIAN/preinst"
+	changeMode 0755 "$packageDir/DEBIAN/postinst"
+	changeMode 0755 "$packageDir/DEBIAN/prerm"
+	changeMode 0755 "$packageDir/DEBIAN/postrm"
+	
+	# set control file version field #
+	
+	[[ "$versionPList" == "" ]] || \
+		setControlFileVersionFieldUsingVersionPList "$packageDir/DEBIAN/control" "$versionPList"
+
+	# determine package name #
+	packageName=`getPackageFileNameUsingControlFile "$packageDir/DEBIAN/control"`
+		
+	# create package #
+	createDebianPackage "$packageDir" "$packageName" "$outputDir"
+	
+	# create zip #
+	if [[ $useZOption == "true" ]]; then
+
+		zipFileName="$outputDir/${packageName}.zip"
+
+		echo -n "Creating zip $zipFileName... "
+		
+		rm -f "$zipFileName" || \
+			panic $? "Failed to remove $zipFileName"
+		
+		pushd "$packageDir" 1> /dev/null
+		
+		zip -qrX "$zipFileName" * || \
+			panic $? "Failed."
+
+		popd 1> /dev/null
+		
+		echo "Done."
+	fi
+}
+
+function createDebianPackage() # args: sourceDir, packageName [, outputDir]
+{
+	$setCmd
+	
+	local sourceDir="$1"
+	local packageName="$2"
+	local outputDir="$3"
+	
+	local packageFile="${outputDir:-.}/$packageName.deb"
+	
+	echo -n "Building package $packageFileName... "
+
+	local tempDir="`getTempDir`"
+	
+	createTarForDebianPackage "$sourceDir/DEBIAN" "$tempDir" "control" "-n"
+	createTarForDebianPackage "$sourceDir" "$tempDir" "data" "--exclude" "DEBIAN/*" "--exclude" "DEBIAN"
+	
+	echo "2.0" > "$tempDir/debian-binary" || \
+		panic $? "Failed to create debian-binary file"
+	
+	ar -rc "$packageFile" "$tempDir/debian-binary" "$tempDir/control.tar.gz" "$tempDir/data.tar.gz" || \
+		panic $? "Failed to create Debian archive"
+
+	echo "Done."
+}
+
+function createTarForDebianPackage() # args: sourceDir, outputDir, tarName [, options]
+{
+	$setCmd
+	
+	local sourceDir="$1"
+	local outputDir="$2"
+	local tarName="$3"
+	shift 3
+	
+	pushd "$sourceDir" 1> /dev/null
+
+	tar -cLpz --disable-copyfile --exclude ".*" "$@" -f "$outputDir/$tarName.tar.gz" * || \
+		panic $? "Failed to create $tarName archive"
+
+	popd 1> /dev/null
+}
+
+
+# === install, remove, purge (actions) === #
+
+function managePackageOnDevice() # args: manageAction, packageFileOrName, hostAddress, hostPort
+{
+	local manageAction="$1"
+	local packageFileOrName="$2"
+	local hostAddress="$3"
+	local hostPort="$4"
+	local doingWhat
+	local direction
+	local didWhat
+	local cmdBin="dpkg"
+	local cmdArg
+	local devicePackagesDir
+	
+	if [[ "$manageAction" == "install" ]]; then
+		doingWhat="Installing"
+		direction="on"
+		didWhat="installed"
+		cmdArg="--install"
+	elif [[ "$manageAction" == "remove" ]]; then
+		doingWhat="Removing"
+		direction="from"
+		didWhat="removed"
+		cmdArg="--remove"
+	elif [[ "$manageAction" == "purge" ]]; then
+		doingWhat="Purging"
+		direction="from"
+		didWhat="purged"
+		cmdArg="--purge"
+	else
+		panic 1 "Invalid manage action: $manageAction"
+	fi
+	
+	if [[ $hostAddress == "" ]]; then
+	
+		requireExportedVariable "MonkeyDevDevice"
+		
+		hostAddress="$MonkeyDevDevice"
+		
+		[[ $hostAddress != "" ]] || \
+			panic 1 "Host address not provided and environment variable MonkeyDevDevice is not set or is empty"
+	fi
+
+	if [[ $hostPort == "" ]]; then
+
+		hostPort="$MonkeyDevPort"
+
+		[[ $hostPort != "" ]] || hostPort="2222"
+
+	fi
+
+	# if installing, copy package to device #
+	if [[ $manageAction == "install" ]]; then
+	
+		requireFile "$packageFileOrName" false
+
+		devicePackagesDir="/var/root/MonkeyDevPackages"
+
+		copyFileToDevice "$packageFileOrName" "$devicePackagesDir" "$hostAddress" "$hostPort"
+
+		packageFileOrName="$devicePackagesDir/`basename \"$packageFileOrName\"`"
+	fi
+	
+	# install, remove or purge package #
+	echo "$doingWhat package `basename \"$packageFileOrName\"` $direction device $hostAddress... "
+
+	ssh -p$hostPort root@$hostAddress "$cmdBin" $cmdArg "$packageFileOrName" || \
+		panic $? "Failed."
+	
+	# success #
+	echo "Done."
+}
+
+# === rmheaders (action) === #
+
+function removeCopiedHeaders() # args: removeWhat, headerFileTag
+{
+	local removeWhat="$1"
+	local headerFileTag="$2"
+	local fileNamePattern="*${headerFileTag}.h"
+	local iosSdkPath
+	local basePath
+	local foundFiles
+	local f
+	
+	[[ "$removeWhat" != "public" || "$headerFileTag" != "" ]] || \
+		panic 1 "Invalid option: cannot target public frameworks with an empty header tag"
+
+	iosSdkPath=`getSdkProperty iphoneos Path`
+	requireDir "$iosSdkPath"
+
+	if [[ $removeWhat == "private" ]]; then
+		basePath="$iosSdkPath/System/Library/PrivateFrameworks"
+	elif [[ $removeWhat == "public" ]]; then
+		basePath="$iosSdkPath/System/Library/Frameworks"
+	else
+		panic $? "Invalid option: $removeWhat"
+	fi
+	requireDir "$basePath"
+
+	# find and remove header files #
+	
+	foundFiles=(`find "$basePath" -type f -name "$fileNamePattern"`)
+	
+	if [[ "${#foundFiles[@]}" != 0 ]]; then
+	
+		echo "Removing ${#foundFiles[@]} header files matching '$fileNamePattern' in iOS SDK $removeWhat frameworks..."
+		
+		for f in "${foundFiles[@]}"; do
+			rm -f "$f" || \
+				panic $? "Failed to remove file $f"			
+		done
+		
+	else
+		echo "No header files found matching '$fileNamePattern' in iOS SDK $removeWhat frameworks"
+	fi
+}
+
+# === cp2sdk (action) === #
+
+function copyHeadersToSDK() # args: copyWhat, sourceDirectory [, headerFileTag]
+{
+	local copyWhat="$1"
+	local sourceDirectory="$2"
+	local headerFileTag="$3"
+	local iosSdkPath	
+	local targetBasePath
+	local dontUseHeadersDir=false
+	local copyingToWhere
+	
+	requireDir "$sourceDirectory"
+	
+	iosSdkPath=`getSdkProperty iphoneos Path`
+	requireDir "$iosSdkPath"
+	
+	if [[ $copyWhat == "private" ]]; then
+		targetBasePath="$iosSdkPath/System/Library/PrivateFrameworks"
+		copyingToWhere="iOS SDK $copyWhat frameworks"
+		
+	elif [[ $copyWhat == "public" ]]; then
+		targetBasePath="$iosSdkPath/System/Library/Frameworks"
+		copyingToWhere="iOS SDK $copyWhat frameworks"
+		[[ $headerFileTag != "" ]] || \
+			headerFileTag="_Dumped"
+			
+	elif [[ $copyWhat == "springboard" ]]; then
+		targetBasePath="$MonkeyDevPath/include/SpringBoard"
+		copyingToWhere="$targetBasePath"
+		dontUseHeadersDir=true
+		requireDir "$targetBasePath" true # <-- for springboard only (since headers don't go in SDK)
+		
+	else
+		panic $? "Invalid option: $copyWhat"
+	fi
+	
+	requireDir "$targetBasePath"
+
+	echo "Copying header files from $sourceDirectory to $copyingToWhere..."
+	
+	processDirToCopyHeadersToSDK "$sourceDirectory" "$sourceDirectory" "$targetBasePath" "$headerFileTag" "$dontUseHeadersDir"
+}
+
+function processDirToCopyHeadersToSDK() # args: pathToTrimOffFromTargetHeaderFilePaths, sourceDirectory, targetBasePath, headerFileTag, dontUseHeadersDir
+{
+	local pathToTrimOffFromTargetHeaderFilePaths="$1"
+	local sourceDirectory="$2"
+	local targetBasePath="$3"
+	local headerFileTag="$4"
+	local dontUseHeadersDir="$5"
+	
+	local foundDirs
+	local d
+	local foundFiles
+	local f
+
+	local fileName
+	local sourceDirectoryWithNoHeaders
+	local targetDir
+	local targetfile
+	
+	# files #
+
+	foundFiles=(`find "$sourceDirectory" -type f -maxdepth 1 -mindepth 1 -name "*.h"`)
+	
+	for f in "${foundFiles[@]}"; do
+		sourceDirectoryWithNoHeaders="${sourceDirectory%/Headers}"
+		targetDir="$targetBasePath${sourceDirectoryWithNoHeaders/#$pathToTrimOffFromTargetHeaderFilePaths}"
+		
+		[[ $dontUseHeadersDir == "true" ]] || \
+			targetDir+="/Headers"
+		
+		fileName="${f/#$sourceDirectory}"
+		targetfile="${targetDir}${fileName%.h}${headerFileTag}.h"
+		
+		requireDir "$targetDir" true
+		changeMode 0777 "$targetDir"
+		
+		copyFile "$f" "$targetfile"
+		changeMode 0666 "$targetfile"
+	done
+
+	# dirs #
+
+	foundDirs=(`find -E "$sourceDirectory" -type d -maxdepth 1 -mindepth 1 -iregex "^.*/(Frameworks|.+\.framework|Headers)$"`)
+
+	for d in "${foundDirs[@]}"; do
+		processDirToCopyHeadersToSDK "$pathToTrimOffFromTargetHeaderFilePaths" "$d" "$targetBasePath" "$headerFileTag" $dontUseHeadersDir
+	done
+}
+
+# === dump === #
+
+function dumpSDKHeaders() # args: dumpWhat, outputDirectory [, useZOption] [, useIOption]
+{
+	local dumpWhat="$1"
+	local outputDirectory="$2"
+	local useZOption="$3"
+	local useIOption="$4"
+	local iosSdkPath
+	local iosSdkVersion
+	local sourceBasePath
+	local classDumpBin
+	local classDumpArgs
+	local dontUseHeadersDir=false
+	local dumpingWhat
+	
+	iosSdkPath=`getSdkProperty iphoneos Path`
+	requireDir "$iosSdkPath"
+	
+	iosSdkVersion=`getSdkProperty iphoneos SDKVersion`
+	
+	if [[ $dumpWhat == "private" ]]; then
+		sourceBasePath="$iosSdkPath/System/Library/PrivateFrameworks"
+		dumpingWhat="iOS SDK $dumpWhat frameworks"
+	elif [[ $dumpWhat == "public" ]]; then
+		sourceBasePath="$iosSdkPath/System/Library/Frameworks"
+		dumpingWhat="iOS SDK $dumpWhat frameworks"
+	elif [[ $dumpWhat == "springboard" ]]; then
+		sourceBasePath="$iosSdkPath/System/Library/CoreServices/SpringBoard.app"
+		dumpingWhat="iOS SpringBoard Core Service"
+		dontUseHeadersDir="true"
+	else
+		panic $? "Invalid option: $dumpWhat"
+	fi
+
+	if [[ $useZOption == "true" ]]; then
+		classDumpBin="class-dump"
+		classDumpArgs="--sdk-ios $iosSdkVersion"
+	else
+		classDumpBin="class-dump-z"
+		classDumpArgs="-pabkkAR -X NS,CF,CG -y $iosSdkPath"
+	fi
+	
+	classDumpBin="`which $classDumpBin`" || \
+		panic $? "Failed to get $classDumpBin path"
+	
+	echo "Dumping header files of $dumpingWhat to $outputDirectory..."
+	
+	processDirToDumpSDKHeaders "$sourceBasePath" "$sourceBasePath" "$outputDirectory" $dontUseHeadersDir
+
+	if [[ $useIOption != "true" ]]; then
+		echo "Fixing import statements..."
+		cleanUpDumpedHeaderFiles "$outputDirectory" "$dumpWhat"
+	fi
+}
+
+function processDirToDumpSDKHeaders() # args: pathToTrimOffFromTargetHeaderFilePaths, sourceDirectory, outputDirectory, dontUseHeadersDir
+{
+	local pathToTrimOffFromTargetHeaderFilePaths="$1"
+	local sourceDirectory="$2"
+	local outputDirectory="$3"
+	local dontUseHeadersDir="$4"
+	local foundDirs
+	local d
+	local foundFiles
+	local f
+	local targetPath
+			
+	# files #
+
+	foundFiles=(`find -E "$sourceDirectory" -type f -maxdepth 1 -mindepth 1 -iregex "^.*/([^.]+|.+\.dylib|.+\.o)?$" -not -name "PkgInfo"`)
+	
+	for f in "${foundFiles[@]}"; do
+		targetPath="$outputDirectory${sourceDirectory/#$pathToTrimOffFromTargetHeaderFilePaths}"
+		
+		[[ $dontUseHeadersDir == "true" ]] || \
+			targetPath+="/Headers"
+
+		requireDir "$targetPath" true
+		"$classDumpBin" $classDumpArgs -H -o "$targetPath" "$f" 2>/dev/null || true # forget abou' it.
+	done
+
+	# dirs #
+
+	foundDirs=(`find "$sourceDirectory" -type d -maxdepth 1 -mindepth 1 -not -name "Headers" -not -name "_CodeSignature"`)
+
+	for d in "${foundDirs[@]}"; do
+		processDirToDumpSDKHeaders "$pathToTrimOffFromTargetHeaderFilePaths" "$d" "$outputDirectory" $dontUseHeadersDir
+	done
+}
+
+function cleanUpDumpedHeaderFiles() # args: baseDir [, forWhat]
+{
+	local baseDir="$1"
+	local forWhat="$2"
+	local removals=("NSObject\\.h" "NSString\\.h")
+	local r
+	local files
+	local f
+	local fileDir
+	local fwDirBaseName
+	local fwName
+	local imports
+	local i
+	local fileName
+	local origFileContents
+	local newFileContents
+	local fName
+	
+	# springboard only: move XXUnknownSuperclass.h to SBUnknownSuperclass.h
+	
+	if [[ $forWhat == "springboard" && -f "$baseDir/XXUnknownSuperclass.h" ]]; then
+		mv -f "$baseDir/XXUnknownSuperclass.h" "$baseDir/SBUnknownSuperclass.h" || \
+			panic $? "Failed to move $baseDir/XXUnknownSuperclass.h to $baseDir/SBUnknownSuperclass.h"
+	fi
+
+	# find files
+
+	files=(`find "$baseDir" -name '*.h'`)
+
+	# remove imports (in $removals)
+	
+	for r in "${removals[@]}"; do
+		for f in "${files[@]}"; do
+			perl -i -pe 's/^#import "'"$r"'"$//g' "$f" || \
+				panic $? "Failed to perl $f"
+		done
+	done
+	
+	# iterate through all files
+	
+	for f in "${files[@]}"; do
+		fName="${f##*/}"
+		fileDir="${f%/*}"
+		fwDirBaseName="${f%.framework/*}"
+		fwName="${fwDirBaseName##*/}"
+
+		origFileContents=`cat "$f"` || \
+			panic $? "Failed to cat $f"
+		newFileContents="$origFileContents"
+
+		if [[ $forWhat != "springboard" ]]; then
+			# change "headerfile.h" imports to <framework/headerfile.h> imports (if headerfile.h exists in framework's directory)
+			
+			set +e
+			imports=(`perl -ne 'print if /#import[\s]+"[^\/]+"/' "$f"`)
+			set -e
+			
+			for i in "${imports[@]}"; do
+				if [[ "$i" == \"*\" ]]; then
+					fileName=${i//\"/}
+					if [[ -f "$fileDir/$fileName" ]]; then
+						newFileContents=`echo "$newFileContents" | sed "s/^#import *\"$fileName\"/#import \\<$fwName\\/$fileName\\>/g"` || \
+							panic $? "Failed to echo into sed"
+					fi
+				fi
+			done
+		fi
+				
+		# address XXUnknownSuperclass
+
+		if [[ -f "$fileDir/XXUnknownSuperclass.h" ]] || [[ $forWhat == "springboard" && -f "$fileDir/SBUnknownSuperclass.h" ]]; then
+		
+			# XXUnknownSuperclass.h found ...
+			
+			if [[ $forWhat != "springboard" ]]; then
+				# change <XXUnknownSuperclass.h> to <framework/XXUnknownSuperclass.h>
+				newFileContents=`echo "$newFileContents" | sed "s/^#import *\\<XXUnknownSuperclass\\.h\\>\( *\\/\\/ *Unknown library\)/#import \\<${fwName}\\/XXUnknownSuperclass\\.h\\>/g"` || \
+					panic $? "Failed to echo into sed"
+					
+			else
+				# change <XXUnknownSuperclass.h> to "SBUnknownSuperclass.h"
+				newFileContents=`echo "$newFileContents" | sed "s/^#import *\\<XXUnknownSuperclass\\.h\\>\( *\\/\\/ *Unknown library\)/#import \\"SBUnknownSuperclass\\.h\\"/g"` || \
+					panic $? "Failed to echo into sed"
+
+				# change XXUnknownSuperclass to SBUnknownSuperclass
+				newFileContents=`echo "$newFileContents" | sed "s/XXUnknownSuperclass/SBUnknownSuperclass/g"` || \
+					panic $? "Failed to echo into sed"					
+			fi
+		else
+			# XXUnknownSuperclass.h not found ...
+			
+			# remove import of <XXUnknownSuperclass.h>
+			newFileContents=`echo "$newFileContents" | sed "s/^#import *\\<XXUnknownSuperclass\\.h\\>\( *\\/\\/ *Unknown library\)//g"` || \
+				panic $? "Failed to echo into sed"
+
+			# replace XXUnknownSuperclass with NSObject
+			newFileContents=`echo "$newFileContents" | sed "s/ *: *XXUnknownSuperclass */ : NSObject /g"` || \
+				panic $? "Failed to echo into sed"
+		fi
+		
+		# TODO: insert (XX|SB)UnknownSuperclass interface
+		#if [[ $fName == "XXUnknownSuperclass.h" ]]; then
+		#	"@interface XXUnknownSuperclass : NSObject"
+		#	"@end"
+		#elif [[ $forWhat == "springboard" && $fName == "SBUnknownSuperclass.h" ]]; then
+		#	"@interface SBUnknownSuperclass : NSObject"
+		#	"@end"
+		#fi
+		
+		# rewrite file (if changed)
+		
+		[[ $origFileContents == "$newFileContents" ]] || \
+			echo "$newFileContents" > "$f" || \
+				panic $? "Failed to echo into $f"
+	done
+}
+
+# === dump2sdk (action) === #
+
+function dumpAndCopyHeaders() # args: copyWhat [, headerFileTag] [, useZOption] [, useIOption]
+{
+	local copyWhat="$1"
+	local headerFileTag="$2"
+	local useZOption="$3"
+	local useIOption="$4"
+	local tmpDir
+	
+	tmpDir=`getTempDir`
+	
+	dumpSDKHeaders "$copyWhat" "$tmpDir" "$useZOption" "$useIOption"
+
+	copyHeadersToSDK "$copyWhat" "$tmpDir" "$headerFileTag"
+}
+
+# === sshkey (action) === #
+
+function addSshKeyToDevice() # args: [hostAddress] [, useROption] [, hostPort]
+{
+	local hostAddress="$1"
+	local useROption="$2"
+	local hostPort="$3"
+	local homeDir=`eval echo ~$USER`
+	local privateKeyPath="$homeDir/.ssh/id_rsa"
+	local publicKeyPath="$homeDir/.ssh/id_rsa.pub"
+	local authorizedKeysPath="/var/root/.ssh/authorized_keys"
+	local publicKey
+	local sshKeygenBin
+	local existingAuthorizedKeys
+	local grepExit
+	
+	if [[ "$useROption" == "true" ]]; then
+		local argsWithoutROption=(${originalArguments[@]/-r/})
+		requireSudo "${argsWithoutROption[@]}"
+	fi
+
+	if [[ $hostAddress == "" ]]; then
+	
+		requireExportedVariable "MonkeyDevDevice"
+		hostAddress="$MonkeyDevDevice"
+		
+		[[ $hostAddress != "" ]] || \
+			panic 1 "Host address not provided and environment variable MonkeyDevDevice is not set or is empty"
+	fi
+
+	if [[ $hostPort == "" ]]; then
+
+		hostPort="$MonkeyDevPort"
+
+		[[ $hostPort != "" ]] || \
+			hostPort=22
+	fi
+
+	sshKeygenBin=`which ssh-keygen` || \
+		panic $? "Failed to get ssh-keygen path"
+
+	if [[ ! -f "$publicKeyPath" ]]; then
+		echo "User's SSH authentication key does not exist, generating..."
+		"$sshKeygenBin" -t rsa -f "$privateKeyPath" || \
+			panic $? "Failed to generate SSH authentication key"
+	fi
+
+	requireFile "$publicKeyPath" false
+
+	publicKey=`cat "$publicKeyPath"` || \
+		panic $? "Failed to cat $publicKeyPath"
+
+	echo "Reading existing authorized keys from device $MonkeyDevDevice..."
+	
+	existingAuthorizedKeys=`ssh -p$hostPort -T root@$hostAddress << EOF
+if [[ ! -d "${authorizedKeysPath%/*}" ]]; then
+	mkdir "${authorizedKeysPath%/*}"
+	chmod 700 "${authorizedKeysPath%/*}"
+fi
+if [[ ! -f "$authorizedKeysPath" ]]; then
+	touch "$authorizedKeysPath"
+	chmod 600 "$authorizedKeysPath"
+fi
+cat "$authorizedKeysPath"
+EOF
+` || panic $? "Failed to read $authorizedKeysPath on device $hostAddress"
+
+	set +e
+	echo "$existingAuthorizedKeys" | grep -q "$publicKey" || grepExit=$?
+	set -e
+
+	if [[ $grepExit == 2 ]]; then
+		panic 2 "Failed to pipe echo into grep"
+	elif [[ $grepExit == 1 ]]; then
+		echo "Writing SSH authentication public key of local account $USER to device..."
+		ssh -p$hostPort root@$hostAddress echo "$publicKey" \>\> "$authorizedKeysPath" || \
+			panic $? "Failed to append public key to $authorizedKeysPath on device $hostAddress"
+
+		echo "Password-less SSH connections can now be performed by local account
+$USER to the root account on device $hostAddress."
+	elif [[ $grepExit == "" || $grepExit == 0 ]]; then
+		echo "Public key is already authorized."
+	fi
+}
+
+# === dumpall2sdk (Action) === #
+
+function dumpAllHeaders() # args: [useZOption] [, useIOption]
+{
+	local useZOption="$1"
+	local useIOption="$2"
+	
+	dumpAndCopyHeaders "public" "" "$useZOption" "$useIOption"
+	dumpAndCopyHeaders "private" "" "$useZOption" "$useIOption"
+	dumpAndCopyHeaders "springboard" "" "$useZOption" "$useIOption"
+}
+
+# === run (Action) === #
+
+function runCmdOnDevice() # args: $hostAddress, [, hostPort] ...
+{
+	local hostAddress="$1"
+	local hostPort="$2"
+	shift 2
+	
+	if [[ $hostAddress == "" ]]; then
+	
+		requireExportedVariable "MonkeyDevDevice"
+		
+		hostAddress="$MonkeyDevDevice"
+		
+		[[ $hostAddress != "" ]] || \
+			panic 1 "Host address not provided and environment variable MonkeyDevDevice is not set or is empty"
+	fi
+
+	if [[ $hostPort == "" ]]; then
+
+		hostPort="$MonkeyDevPort"
+
+		[[ $hostPort != "" ]] || \
+			hostPort=22
+
+	fi
+	
+	ssh -p$hostPort root@$hostAddress "$@" || \
+		panic $? "Failed to run $@ on device $hostAddress"
+}
+
+# === ssh (Action) === #
+function sshToDevice() # args: $hostAddress, $hostPort
+{
+	local hostAddress="$1"
+	local hostPort="$2"
+	
+	if [[ $hostAddress == "" ]]; then
+	
+		requireExportedVariable "MonkeyDevDevice"
+		
+		hostAddress="$MonkeyDevDevice"
+		
+		[[ $hostAddress != "" ]] || \
+			panic 1 "Host address not provided and environment variable MonkeyDevDevice is not set or is empty"
+	fi
+	
+	if [[ $hostPort == "" ]]; then
+
+		hostPort="$MonkeyDevPort"
+
+		[[ $hostPort != "" ]] || \
+			hostPort=22
+
+	fi
+
+	ssh -p$hostPort root@$hostAddress || \
+		panic $? "Failed to SSH to device $hostAddress"
+}
+
+# === update (Action) === #
+
+function updateIncludeAndLib() # args: $hostAddress, $hostPort
+{
+	local hostAddress="$1"
+	local hostPort="$2"
+	
+	if [[ $hostAddress == "" ]]; then
+	
+		requireExportedVariable "MonkeyDevDevice"
+		
+		hostAddress="$MonkeyDevDevice"
+		
+		[[ $hostAddress != "" ]] || \
+			panic 1 "Host address not provided and environment variable MonkeyDevDevice is not set or is empty"
+	fi
+
+	if [[ $hostPort == "" ]]; then
+
+		hostPort="$MonkeyDevPort"
+
+		[[ $hostPort != "" ]] || \
+			hostPort=22
+
+	fi
+	
+	# include
+	
+	echo "Updating include files..."
+	
+	copyFromDevice $hostAddress "/usr/include/ActionMenu/ActionMenu.h" "$MonkeyDevPath/include/ActionMenu" "$hostPort"
+	copyFromDevice $hostAddress "/usr/include/SiriObjects.h" "$MonkeyDevPath/include/AssistantExtensions" "$hostPort"
+	downloadFile "https://raw.github.com/rpetrich/CaptainHook/master/CaptainHook.h" "$MonkeyDevPath/include/CaptainHook/CaptainHook.h"
+	copyFromDevice $hostAddress "/usr/include/libactivator/libactivator.h" "$MonkeyDevPath/include/libactivator" "$hostPort"
+	copyFromDevice $hostAddress "/usr/include/substrate.h" "$MonkeyDevPath/include" "$hostPort"
+	
+	# lib	
+
+	echo "Updating lib files..."
+
+	copyFromDevice $hostAddress "/usr/lib/libactionmenu.dylib" "$MonkeyDevPath/lib" "$hostPort"
+	copyFromDevice $hostAddress "/usr/lib/libactivator.dylib" "$MonkeyDevPath/lib" "$hostPort"
+	copyFromDevice $hostAddress "/usr/lib/libsubstrate.dylib" "$MonkeyDevPath/lib" "$hostPort"
+}
+
+function copyFromDevice() # args: hostAddress, sourceFile, targetDir, hostPort
+{
+	local hostAddress="$1"
+	local sourceFile="$2"
+	local targetDir="$3"
+	local hostPort="$4"
+	
+	requireDir "$targetDir" true
+
+	scp -P$hostPort -q root@$hostAddress:"\"$sourceFile\"" "$targetDir" || \
+		panic $? "Failed to copy file $sourceFile from device $hostAddress to directory $targetDir"
+}
+
+# === func (Action) === #
+
+function runFuncOnDevice() # args: function, hostAddress, hostPort
+{
+	local func="$1"
+	local hostAddress="$2"
+	local hostPort="$3"
+	local cmd
+		
+	if [[ $hostAddress == "" ]]; then
+	
+		requireExportedVariable "MonkeyDevDevice"
+		
+		hostAddress="$MonkeyDevDevice"
+		
+		[[ $hostAddress != "" ]] || \
+			panic 1 "Host address not provided and environment variable MonkeyDevDevice is not set or is empty"
+	fi
+
+	if [[ $hostPort == "" ]]; then
+
+		hostPort="$MonkeyDevPort"
+
+		[[ $hostPort != "" ]] || \
+			hostPort=2222
+
+	fi
+	
+	case "$func" in
+	reboot)
+		cmd="reboot"
+	;;
+	respring)
+		cmd="killall SpringBoard"
+	;;
+	*)
+		panic $? "Invalid function: $func"
+	;;
+	esac
+	  
+	ssh -p$hostPort root@$hostAddress $cmd || \
+		panic $? "Failed to perform function $func on device $hostAddress"
+}
+
+# === sudo === #
+function requireSudo() # args: ...
+{
+	if [[ $EUID != 0 ]]; then
+	
+		removeTempData
+		
+		exec sudo "$0" "$@" || \
+			panic $? "Failed to re-execute as root"
+	fi
+}
+
+# === xcbp-logos === #
+
+function doesFileContain() # args: filePath, pattern
+{
+	$setCmd
+	
+	local filePath="$1"
+	local pattern="$2"
+	local perlValue
+	local funcReturn
+	
+	perlValue=`perl -ne 'if (/'"$pattern"'/) { print "true"; exit; }' "$filePath"` || \
+		panic $? "Failed to perl"
+
+	if [[ $perlValue == "true" ]]; then
+		funcReturn="true"
+	else
+		funcReturn="false"
+	fi
+	
+	# return #
+	echo $funcReturn
+}
+
+function xcodeBuildPhase_Logos() # no args
+{
+	[[ "$ACTION" == "build" ]] || \
+		panic 1 "For Xcode Build Phase use only"
+	
+	echo "Preparing to run Xcode Build Phase for Logos Processor..."
+
+	# process environment variables
+	local pbxProjectFilePath="$PROJECT_FILE_PATH/project.pbxproj"
+	local logosProcessor
+	local projectFileModified=false
+	local projectContainsXmFiles
+	local projectContainsXFiles
+	local lastKnownXmFileTypeNotObjCpp
+	local lastKnownXFileTypeNotObjC
+	local xmFileLangSpecNotObjCpp
+	local xFileLangSpecNotObjC
+	local projectXmFiles
+	local projectXFiles
+	local logosStdErr
+	local logosErr=0
+	
+	# verify use
+	[[ -f "$pbxProjectFilePath" ]] || \
+		panic 1 "Xcode project file not found: $pbxProjectFilePath"
+	
+	logosProcessor=`which logos.pl` || \
+		panic $? "Failed to locate Logos Processor. Is Theos installed? If not, see http://iphonedevwiki.net/index.php/Theos/Getting_Started."
+	
+	# for *.xm project files, set known file-type and language specifications to Objective-C++
+	projectContainsXmFiles=`doesFileContain "$pbxProjectFilePath" '\/\* .+\.xm \*\/ *= *\{.*?isa *= *PBXFileReference\b'`
+	projectContainsXFiles=`doesFileContain "$pbxProjectFilePath" '\/\* .+\.x \*\/ *= *\{.*?isa *= *PBXFileReference\b'`
+	
+	if [[ $projectContainsXmFiles == "true" ]]; then
+	
+		lastKnownXmFileTypeNotObjCpp=`doesFileContain "$pbxProjectFilePath" '\/\* .+\.xm \*\/ *= *\{.*?isa *= *PBXFileReference\b[^\}]*?\blastKnownFileType *= *text\b'`
+	
+		if [[ $lastKnownXmFileTypeNotObjCpp == "true" ]]; then
+			echo "Modifying Xcode project file: setting *.xm file-types to Objective-C++..."
+			
+			perl -i -pe 's/^(.*\/\* .+\.xm \*\/ *= *{.*?isa *= *PBXFileReference\b[^}]*?\blastKnownFileType *= *)[^;]+(.*)$/\1sourcecode.cpp.objcpp\2/g' "$pbxProjectFilePath" || \
+				panic $? "Failed to modify Xcode project file"
+	
+			projectFileModified=true
+		fi
+	
+		xmFileLangSpecNotObjCpp=`perl -ne 'if ($_ =~ /\/\* .+\.xm \*\/ *= *\{.*?isa *= *PBXFileReference\b/ && $_ !~ /\bxcLanguageSpecificationIdentifier *= *xcode\.lang\.objcpp\b/) { print "true"; exit; }' "$pbxProjectFilePath"` || \
+			panic $? "Failed to execute perl on $pbxProjectFilePath"
+	
+		if [[ $xmFileLangSpecNotObjCpp == "true" ]]; then
+			echo "Modifying Xcode project file: setting *.xm language to Objective-C++..."
+			
+			perl -i -pe 'if ($_ =~ /\/\* .+\.xm \*\/ *= *\{.*?isa *= *PBXFileReference\b/ && $_ !~ /\bxcLanguageSpecificationIdentifier *= *xcode\.lang\.objcpp\b/) { s/^(.*\/\* .+\.xm \*\/ *= *{.*?isa *= *PBXFileReference\b[^}]*)(.*)$/\1xcLanguageSpecificationIdentifier = xcode.lang.objcpp; \2/g; }' "$pbxProjectFilePath" || \
+				panic $? "Failed to modify Xcode project file"
+		
+			projectFileModified=true
+		fi
+	fi
+	
+	if [[ $projectContainsXFiles == "true" ]]; then
+	
+		lastKnownXFileTypeNotObjCpp=`doesFileContain "$pbxProjectFilePath" '\/\* .+\.x \*\/ *= *\{.*?isa *= *PBXFileReference\b[^\}]*?\blastKnownFileType *= *text\b'`
+	
+		if [[ $lastKnownXFileTypeNotObjC == "true" ]]; then
+			echo "Modifying Xcode project file: setting *.x file-types to Objective-C..."
+			
+			perl -i -pe 's/^(.*\/\* .+\.x \*\/ *= *{.*?isa *= *PBXFileReference\b[^}]*?\blastKnownFileType *= *)[^;]+(.*)$/\1sourcecode.c.objc\2/g' "$pbxProjectFilePath" || \
+				panic $? "Failed to modify Xcode project file"
+	
+			projectFileModified=true
+		fi
+	
+		xFileLangSpecNotObjC=`perl -ne 'if ($_ =~ /\/\* .+\.x \*\/ *= *\{.*?isa *= *PBXFileReference\b/ && $_ !~ /\bxcLanguageSpecificationIdentifier *= *xcode\.lang\.objc\b/) { print "true"; exit; }' "$pbxProjectFilePath"` || \
+			panic $? "Failed to execute perl on $pbxProjectFilePath"
+	
+		if [[ $xFileLangSpecNotObjC == "true" ]]; then
+			echo "Modifying Xcode project file: setting *.x language to Objective-C..."
+			
+			perl -i -pe 'if ($_ =~ /\/\* .+\.x \*\/ *= *\{.*?isa *= *PBXFileReference\b/ && $_ !~ /\bxcLanguageSpecificationIdentifier *= *xcode\.lang\.objc\b/) { s/^(.*\/\* .+\.x \*\/ *= *{.*?isa *= *PBXFileReference\b[^}]*)(.*)$/\1xcLanguageSpecificationIdentifier = xcode.lang.objc; \2/g; }' "$pbxProjectFilePath" || \
+				panic $? "Failed to modify Xcode project file"
+		
+			projectFileModified=true
+		fi
+	fi
+	
+	if [[ $projectFileModified == "true" ]]; then
+		echo "DON'T WORRY, EVERYTHING IS OK!"
+		echo "The Xcode project file was modified to provide better *.xm & *.x file support."
+		echo "To dismiss this build error, just perform the build again."
+		panic 1
+	fi
+	
+	# for each *.xm project file, use Logos Processor to generate *.mm file
+	
+	projectXmFiles=($(perl -ne 'if ($_ =~ /\/\* (.+\.xm) \*\/ *= *{.*?isa *= *PBXFileReference\b/) { print "$1\n"; }' "$pbxProjectFilePath"))
+	projectXFiles=($(perl -ne 'if ($_ =~ /\/\* (.+\.x) \*\/ *= *{.*?isa *= *PBXFileReference\b/) { print "$1\n"; }' "$pbxProjectFilePath"))
+	
+	for f in "${projectXmFiles[@]}"; do
+		echo "Logos Processor: $f -> ${f%.*}.mm..."
+
+		logosStdErr=$(("$logosProcessor" "$PROJECT_DIR/$TARGET_NAME/$f" > "$PROJECT_DIR/$TARGET_NAME/${f%.*}.mm") 2>&1) || \
+			logosErr=$?
+		
+		if [[ $logosErr != 0 ]]; then
+			echo "Failed Logos Processor" >&2
+			echo "Logos Processor outputted:" >&2
+			echo "$logosStdErr" >&2
+			exit $logosErr
+		fi
+		
+	done
+	
+	for f in "${projectXFiles[@]}"; do
+		echo "Logos Processor: $f -> ${f%.*}.m..."
+
+		logosStdErr=$(("$logosProcessor" "$PROJECT_DIR/$TARGET_NAME/$f" > "$PROJECT_DIR/$TARGET_NAME/${f%.*}.m") 2>&1) || \
+			panic $? "Failed Logos Processor"
+	
+		[[ $logosStdErr == "" ]] || \
+			panic 1 "Logos Processor outputted: $logosStdErr"
+	done
+
+	echo "Note: If any *.xm or *.x file generated above by the Logos Processor (${projectXmFiles[@]}) is not being compiled below, then you must add it to the Xcode project to be compiled."
+
+	# success #
+	echo "Xcode Build Phase for Logos Processor complete."
+}
+
+# === xcbp (action) === #
+function xcodeBuildPhase() # no args
+{
+	[[ "$ACTION" == "build" ]] || \
+		panic 1 "For Xcode Build Phase use only"
+	
+	echo "Preparing to run Xcode Build Phase..."
+	
+	# process environment variables #
+	#编译可执行文件路径
+	local builtExecutable="$TARGET_BUILD_DIR/$EXECUTABLE_PATH"
+	#deb文件目录
+	local packageDirectory="$PROJECT_DIR/$TARGET_NAME/Package"
+	local packageInstallPath="$packageDirectory$INSTALL_PATH"
+	#deb版本文件
+	local packageVersionPListPath="$PROJECT_DIR/$TARGET_NAME/PackageVersion.plist"
+	#存放所有deb目录
+	local allPackagesDir="$PROJECT_DIR/Packages"
+	#编译产品目录
+	local builtProductsDir="$BUILT_PRODUCTS_DIR"
+	#最新的编译版本
+	local latestBuildSymlink="$PROJECT_DIR/LatestBuild"
+	local stripBin
+	local stripOption
+	local versionPListPath
+	local packageFileName
+	
+	#目标文件路径
+	local packageInstallSource
+	if [[ $SHALLOW_BUNDLE != "YES" ]]; then
+		packageInstallSource="$TARGET_BUILD_DIR/$EXECUTABLE_PATH"
+	else
+		packageInstallSource="$TARGET_BUILD_DIR/$EXECUTABLE_FOLDER_PATH"
+	fi
+
+	#如果编译设置里面MonkeyDevDevice为空的话，就从用户的profile里面去拿
+	[[ $MonkeyDevDevice != "" ]] || \
+		MonkeyDevDevice=`getBashProfileEnvVarValue "MonkeyDevDevice"`
+
+	#如果编译设置里面MonkeyDevPort为空的话，就从用户的profile里面去拿，如果还没有就默认2222
+	[[ $MonkeyDevPort != "" ]] || \
+		MonkeyDevPort=`getBashProfileEnvVarValue "MonkeyDevPort"`
+
+	[[ $MonkeyDevPort != "" ]] || \
+		MonkeyDevPort=2222
+
+	#验证必要文件的存在
+	requireFile "$builtExecutable" false
+	requireDir "$packageDirectory"
+	
+	#创建最后一个编译的符号链接
+	createSymlink "$builtProductsDir" "$latestBuildSymlink"
+
+	#如果是Archive，strip可执行文件
+	#to fix Archive ACTION is install
+	if [[ "$CONFIGURATION" == "Release" && "$VALIDATE_PRODUCT" == "YES" && "$DEPLOYMENT_POSTPROCESSING" == "YES" ]]; then
+		if [[ "$STRIP_INSTALLED_PRODUCT" == "YES" ]]; then
+
+			stripBin=`xcodebuild -sdk iphoneos -find strip` || \
+				panic $? "Failed to get strip path"
+
+			echo "$stripBin"
+
+			[[ "$STRIP_STYLE" != "debugging" ]] || stripOption="-S"
+
+			echo "Stripping $builtExecutable..."
+
+			"$stripBin" $stripOption "$builtExecutable" || \
+				panic $? "Failed to strip $builtExecutable"
+		fi
+	fi
+
+	#静态库跳过签名
+	if [[ "$MACH_O_TYPE" == "staticlib" && "$CODE_SIGN_IDENTITY" == "" ]]; then
+		echo "Skipping signing (since ldid would be used and it fails on static libraries)"
+	elif [[ "$PLATFORM_NAME" != "iphoneos" ]]; then
+		echo "Skipping signing (since platform is not iphoneos)"
+	else
+		signCode "$builtExecutable" "$CODE_SIGN_IDENTITY"
+	fi
+
+	changeMode "$INSTALL_MODE_FLAG" "$builtExecutable"
+
+	#是否需要拷贝到设备
+	if [[ "$MonkeyDevCopyOnBuild" == "YES" ]]; then
+	
+		#拷贝到设备的/var/root/MonkeyDevBuilds/
+		if [[ "$MonkeyDevDevice" != "" ]]; then
+			copyFileToDevice "$builtExecutable" "/var/root/MonkeyDevBuilds/$PROJECT_NAME" "$MonkeyDevDevice" "$MonkeyDevPort"
+		else
+			# build setting MonkeyDevDevice is empty #
+			panic 1 "Unable to copy executable to device since build setting MonkeyDevDevice is not set or is empty and it is not exported in your Bash personal initialization file"
+		fi
+	
+	fi
+
+	#如果是Archive或者profiling，生成deb
+	if [[ "$CONFIGURATION" == "Release" && "$VALIDATE_PRODUCT" == "YES" ]] || [[ "$MonkeyDevInstallOnAnyBuild" == "YES" ]] || [[ "$MonkeyDevBuildPackageOnAnyBuild" == "YES" ]]; then
+
+		# if doing Archive, do...
+		#if [[ "$DEPLOYMENT_POSTPROCESSING" == "YES" ]]; then
+		#fi
+
+		# prepare to build package #
+		echo "Copying $packageInstallSource to package directory at $packageInstallPath..."
+		
+		requireDir "$packageInstallPath" true
+		
+		#拷贝目标文件到/Package/Library/MobileSubstrate/DynamicLibraries
+		copyFile "$packageInstallSource" "$packageInstallPath"
+
+		# build package #
+		[[ "$MonkeyDevUsePackageVersionPList" != "YES" ]] || \
+			versionPListPath="$packageVersionPListPath"			
+		
+		echo "$versionPListPath"
+
+		buildPackage "$packageDirectory" "$allPackagesDir" "$versionPListPath" true
+		
+		# if more than just $MonkeyDevBuildPackageOnAnyBuild == "YES" ...
+		if [[ "$CONFIGURATION" == "Release" && "$VALIDATE_PRODUCT" == "YES" ]] || [[ "$MonkeyDevInstallOnAnyBuild" == "YES" ]]; then
+		
+			# if doing For Archiving or For Profiling, see about installing package on device...
+			if [[ "$DEPLOYMENT_POSTPROCESSING" == "NO" || "$MonkeyDevInstallOnAnyBuild" == "YES" ]]; then
+			
+				# if build setting MonkeyDevInstallOnProfiling is enabled, installation of package is enabled...
+				if [[ "$MonkeyDevInstallOnProfiling" == "YES"  || "$MonkeyDevInstallOnAnyBuild" == "YES" ]]; then
+				
+					# if MonkeyDevDevice has a value, install package on device...
+					if [[ "$MonkeyDevDevice" != "" ]]; then
+	
+						# get package file name #
+						packageFileName="`getPackageFileNameUsingControlFile \"$packageDirectory/DEBIAN/control\"`.deb"
+							
+						# install package on device #					
+						managePackageOnDevice "install" "$allPackagesDir/$packageFileName" "$MonkeyDevDevice" "$MonkeyDevPort"
+						
+						# respring? #
+						if [[ "$MonkeyDevRespringOnInstall" == "YES" ]]; then
+							echo "Respringing device..."
+							runFuncOnDevice "respring" "$MonkeyDevDevice" "$MonkeyDevPort" 
+						fi
+					else
+						# build setting MonkeyDevDevice is empty #
+						panic 1 "Unable to install package on device since build setting MonkeyDevDevice is not set or is empty and it is not exported in your Bash personal initialization file"
+					fi
+				else
+					# build setting MonkeyDevInstallOnProfiling is disabled #
+					echo "Installation of package on device is disabled. To enable, set build setting MonkeyDevInstallOnProfiling to YES."
+				fi
+			fi
+		fi
+	fi
+
+	# success #
+	echo "Xcode Build Phase complete."
+}
+
+# === usage === #
+function showUsageAndExit() # args: showEverything
+{
+	local showEverything="$1"
+	local n
+	
+	echo "$scriptName (v$scriptVer) -- MonkeyDev Command-line Tool"
+	echo "Usages:"
+	
+	for n in "${ActionNames[@]}"; do
+		eval echo "\"    $scriptName \${Action_$n[$ActionProperty_ShortArg]} \${Action_$n[$ActionProperty_ShortUsage]}\""
+	done
+	
+	if [[ $showEverything == "true" ]]; then
+		echo
+		echo "Actions:"
+		
+		for n in "${ActionNames[@]}"; do
+			eval echo "\"    \${Action_$n[$ActionProperty_ShortArg]} \${Action_$n[$ActionProperty_ShortUsage]}\""
+			eval echo "\"\${Action_$n[$ActionProperty_LongUsage]}\""
+			echo
+		done
+	fi
+
+	panic 1
+}
+
+function showSingleUsageAndExit()
+{
+	panic 1 "Usage: $scriptName ${activeActionArg[$ActionProperty_ShortArg]} ${activeActionArg[$ActionProperty_ShortUsage]}
+
+${activeActionArg[$ActionProperty_LongUsage]}
+"
+		
+}
+
+# === start script === #
+[[ $1 != "" ]] || showUsageAndExit false
+[[ $1 != "--help" ]] || showUsageAndExit true
+
+#寻找有没有对应的参数
+for n in "${ActionNames[@]}"; do
+	foundArg=false
+	eval [[ "\$1" != "\${Action_$n[$ActionProperty_ShortArg]}" ]] || \
+		foundArg=true
+
+	if [[ $foundArg == true ]]; then
+		eval activeActionArg=("\"\${Action_$n[@]}\"")
+		break;
+	fi
+done
+
+[[ $foundArg == true ]] || \
+	panic 1 "Invalid argument: $1"
+
+[[ "$#" != 1 || ${activeActionArg[$ActionProperty_MinArgs]} == 0 ]] || \
+	showSingleUsageAndExit
+
+# process action's options #
+shift 1
+
+while getopts ":${activeActionArg[$ActionProperty_Options]}" opt; do
+	case "$opt" in
+	\?)
+		panic 1 "Invalid option: -$OPTARG"
+	;;
+	*)
+		[[ $opt != ":" ]] || \
+			panic 1 "Option missing value: -$OPTARG"
+
+		eval Opt_$opt="\"${OPTARG-true}\""  #可选参数赋值
+	;;
+	esac
+done
+
+shift $(($OPTIND - 1)) # shift out options
+
+(( "$#" >= ${activeActionArg[$ActionProperty_MinArgs]} && "$#" <= ${activeActionArg[$ActionProperty_MaxArgs]} )) || \
+	showSingleUsageAndExit
+
+# perform action's function #
+[[ ${activeActionArg[$ActionProperty_RequireSudo]} == false ]] || \
+	requireSudo "${originalArguments[@]}"
+
+case "${activeActionArg[$ActionProperty_ShortArg]}" in
+	${Action_SignCode[$ActionProperty_ShortArg]})
+		"${activeActionArg[$ActionProperty_Function]}" "$@" "$Opt_i"
+	;;
+	${Action_BuildPackage[$ActionProperty_ShortArg]})
+		"${activeActionArg[$ActionProperty_Function]}" "$@" "$Opt_p" "$Opt_z"
+	;;
+	${Action_InstallPackage[$ActionProperty_ShortArg]})
+		"${activeActionArg[$ActionProperty_Function]}" "install" "$@" "$Opt_h" "$Opt_p"
+	;;
+	${Action_RemovePackage[$ActionProperty_ShortArg]})
+		"${activeActionArg[$ActionProperty_Function]}" "remove" "$@" "$Opt_h" "$Opt_p"
+	;;
+	${Action_PurgePackage[$ActionProperty_ShortArg]})
+		"${activeActionArg[$ActionProperty_Function]}" "purge" "$@" "$Opt_h" "$Opt_p"
+	;;
+	${Action_DumpSDKHeaders[$ActionProperty_ShortArg]})
+		"${activeActionArg[$ActionProperty_Function]}" "$@" "$Opt_z" "$Opt_i"
+	;;
+	${Action_CopyHeadersToSDK[$ActionProperty_ShortArg]})
+		"${activeActionArg[$ActionProperty_Function]}" "$@" "$Opt_t"
+	;;
+	${Action_DumpAndCopyHeaders[$ActionProperty_ShortArg]})
+		"${activeActionArg[$ActionProperty_Function]}" "$@" "$Opt_t" "$Opt_z" "$Opt_i"
+	;;
+	${Action_RemoveCopiedHeaders[$ActionProperty_ShortArg]})
+		"${activeActionArg[$ActionProperty_Function]}" "$@"
+	;;
+	${Action_AddSshKeyToDevice[$ActionProperty_ShortArg]})
+		"${activeActionArg[$ActionProperty_Function]}" "$Opt_h" "$Opt_r" "$Opt_p"
+	;;
+	${Action_DumpAllHeaders[$ActionProperty_ShortArg]})
+		"${activeActionArg[$ActionProperty_Function]}" "$Opt_z" "$Opt_i"
+	;;
+	${Action_RunCmdOnDevice[$ActionProperty_ShortArg]})
+		"${activeActionArg[$ActionProperty_Function]}" "$Opt_h" "$Opt_p" "$@"
+	;;
+	${Action_RunFuncOnDevice[$ActionProperty_ShortArg]})
+		"${activeActionArg[$ActionProperty_Function]}" "$@" "$Opt_h" "$Opt_p"
+	;;
+	${Action_XcodeBuildPhase[$ActionProperty_ShortArg]})
+		"${activeActionArg[$ActionProperty_Function]}"
+	;;
+	${Action_SshToDevice[$ActionProperty_ShortArg]})
+		"${activeActionArg[$ActionProperty_Function]}" "$Opt_h" "$Opt_p"
+	;;
+	${Action_UpdateIncludeAndLib[$ActionProperty_ShortArg]})
+		"${activeActionArg[$ActionProperty_Function]}" "$Opt_h" "$Opt_p"
+	;;
+	${Action_XcodeBuildPhaseLogos[$ActionProperty_ShortArg]})
+		"${activeActionArg[$ActionProperty_Function]}"
+	;;
+esac
+
+# finished #
+exit 0

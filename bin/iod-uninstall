@@ -1,0 +1,307 @@
+#!/bin/bash
+
+export setCmd="set -eo pipefail"
+$setCmd
+
+# path #
+export PATH=/opt/MonkeyDev/bin:/usr/local/bin:/usr/bin:/usr/sbin:/bin:/sbin:$PATH
+
+# script #
+
+export scriptName="${0##*/}"
+export scriptVer="1.3"
+
+export MonkeyDevPath="/opt/MonkeyDev"
+export backupFileExt=".MonkeyDev"
+
+export userName="${SUDO_USER-$USER}"
+export userGroup=`id -g $userName`
+export userHome=`eval echo ~$userName`
+export bashProfileFiles=("$userHome/.zshrc" "$userHome/.bash_profile" "$userHome/.bashrc" "$userHome/.bash_login" "$userHome/.profile")
+
+export tempDirsFile="`mktemp -d -t $scriptName`/tempdirs"
+touch "$tempDirsFile"
+
+unset LANG
+
+# panic and cleanup #
+
+function cleanup()
+{
+	local exitCode=$?
+	set +e
+	trap - $signals
+	removeTempData
+	exit $exitCode
+}
+function panic()
+{
+	local exitCode=$1
+	set +e
+	shift
+	[[ "$@" == "" ]] || echo "$@" >&2
+	exit $exitCode
+}
+export signals="0 1 2 3 15"
+trap cleanup $signals
+
+function removeTempData()
+{
+	local tempDirs
+	if [[ -f "$tempDirsFile" ]]; then
+		tempDirs=(`cat "$tempDirsFile"`)
+		for td in "${tempDirs[@]}"; do
+			rm -rf "$td" || true
+		done
+		rm -rf "`dirname $tempDirsFile`" || true
+	fi
+}
+function getTempDir()
+{
+	$setCmd
+	local tempDir	
+	tempDir=`mktemp -d -t $scriptName` || \
+		panic $? "Failed to create temporary directory"
+	echo "$tempDir" >> "$tempDirsFile" || \
+		panic $? "Failed to echo into $tempDirsFile"
+	echo "$tempDir"
+}
+
+# common functions #
+
+function copyFile()
+{
+	cp -f "$1" "$2" || \
+		panic $? "Failed to copy file $1 to $2"
+}
+
+# sdk argument functions #
+
+function getSdkProperty()
+{
+	$setCmd
+
+	local sdk="$1"
+	local propertyName="$2"
+
+	propertyValue=`xcodebuild -version -sdk $sdk $propertyName` || \
+		panic $? "Failed to get $sdk SDK property $propertyName"
+
+	[[ $propertyValue != "" ]] || \
+		panic 1 "Value of $sdk SDK property $propertyName cannot be empty"
+
+	# return #
+	echo "$propertyValue"
+}
+
+function getPlatformName()
+{
+	$setCmd
+
+	local sdk="$1"
+	local iosSdkPlatformPath
+	local platformDir
+	local platformName
+	
+	iosSdkPlatformPath=`getSdkProperty $sdk PlatformPath`	
+	platformDir="${iosSdkPlatformPath##*/}"
+	platformName="${platformDir%.*}"
+	
+	# return #
+	echo "$platformName"
+}
+
+function restoreFile()
+{
+	local filePath="$1"
+	local backedUpFilePath="${filePath}${backupFileExt}"
+	
+	if [[ -f "$backedUpFilePath" ]]; then
+		copyFile "$backedUpFilePath" "$filePath"	
+		rm -f "$backedUpFilePath"
+	fi
+}
+
+function removeSdkPrivateHeaderSymlinks()
+{
+	local sdk="$1"
+	local iosSdkPath
+	local privateFWsDir
+	local privateFwBinaries
+	local fullPath
+	local shortPath
+	local sourcePath
+	local targetPath
+	
+	iosSdkPath=`getSdkProperty $sdk Path`
+	
+	[[ -d "$iosSdkPath" ]] || \
+		panic 1 "SDK directory not found: $iosSdkPath"
+		
+	privateFWsDir="$iosSdkPath/System/Library/PrivateFrameworks"
+	
+	[[ -d "$privateFWsDir" ]] || \
+		panic 1 "PrivateFramework directory not found: $privateFWsDir"
+
+	privateFwBinaries=($(find "$privateFWsDir" -type f -perm +111 -ipath "*.framework/*"))
+	
+	for f in "${privateFwBinaries[@]}"; do
+		fullPath=`dirname "$f"`
+		targetPath="${fullPath}/Headers"
+
+		if [[ -e "$targetPath" ]] && [[ ! -L "$targetPath" ]]; then
+			echo "Skipping since not a symlink: $targetPath"
+		elif [[ -L "$targetPath" ]]; then
+			if [[ -f "$targetPath" ]]; then
+				echo "Skipping since symlinked to file: $targetPath"
+			elif [[ -d "$targetPath" ]] || [[ ! -e "$targetPath" ]]; then
+				rm -f "$targetPath" || \
+					panic $? "Failed to remove symlink: $targetPath"
+			else
+				echo "Skipping since symlinked to unknown type: $targetPath"
+			fi
+		fi
+	done
+}
+
+# script functions #
+
+function requireOptionValue()
+{
+	[[ "$2" != "" ]] || \
+		panic 1 "Missing value for $1 option"
+}
+
+function showUsage()
+{
+	panic 1 \
+"$scriptName (v${scriptVer}) -- MonkeyDev Uninstall
+Usages:
+   $scriptName base
+   $scriptName sdk [-sdk <sdk>] [-d <directory>] [-which]
+
+Arguments:
+   base               Uninstall MonkeyDev base, Xcode templates and private
+                      framework header files.
+
+   sdk                Undo modifications made to latest iOS SDK for \"open\"
+                      development.
+
+Options:
+   -sdk <sdk>         SDK name and, optionally, version as one word to set
+                      up. If version is omitted, latest version of named SDK
+                      is used. If <sdk> is entirely omitted, latest iOS SDK is
+                      used.
+
+   -d <directory>     Set environment variable DEVELOPER_DIR to <directory> to
+                      target specific Developer Tools. Use this option when
+                      multiple versions of Xcode are installed.
+
+   -which             Print which SDK and Developer Tools directory will be
+                      used by default if -sdk <sdk> and -d <directory> are
+                      not used.
+"
+}
+
+devToolsDir="`xcode-select --print-path`" || \
+	panic $? "Failed to get Xcode developer directory"
+	
+if [[ ! -d "$DEVELOPER_DIR" ]] && [[ -d "$devToolsDir" ]]; then
+	export DEVELOPER_DIR="$devToolsDir"
+fi
+
+case "$1" in
+
+base)
+	echo "Uninstalling MonkeyDev base, Xcode templates and framework header files..."
+	
+	#删除文件夹
+	rm -rf "$MonkeyDevPath" || \
+		panic $? "Failed to remove directory: $MonkeyDevPath"
+
+	#移除模块符号链接
+	userDevDir="$userHome/Library/Developer"
+	userTemplatesDir="$userDevDir/Xcode/Templates"
+	symlinkPath="$userTemplatesDir/MonkeyDev"
+	
+	rm -f "$symlinkPath" || \
+		panic $? "Failed to remove file: $symlinkPath"
+			
+	#移除profile环境变量
+	for f in "${bashProfileFiles[@]}"; do
+		if [[ -f "$f" ]]; then
+			userBashProfileFile="$f"
+			break
+		fi
+	done
+		
+	if [[ $userBashProfileFile != "" ]]; then
+		sed -i "" "s/^export MonkeyDevPath=.*$//g" "$userBashProfileFile"
+		sed -i "" "s/^export MonkeyDevDevice=.*$//g" "$userBashProfileFile"
+		sed -i "" "s/^export PATH=.*${MonkeyDevPath//\//\\/}\\/bin:.*$//g" "$userBashProfileFile"
+		sed -i "" "s/^export PATH=.*\$MonkeyDevPath\\/bin:.*$//g" "$userBashProfileFile"
+	fi
+;;
+sdk)
+	shift 1
+	
+	sdk="iphoneos" # default to latest iphoneos sdk
+	printWhich="false"
+
+	while [[ $1 != "" ]]; do
+	case "$1" in
+		-sdk)
+			requireOptionValue "$1" "$2"
+			sdk="$2"
+			shift 2
+		;;
+		-d)
+			requireOptionValue "$1" "$2"
+			export DEVELOPER_DIR="$2"
+			shift 2
+		;;
+		-which)
+			printWhich="true"
+			shift 1
+		;;
+		*) panic 1 "Invalid option: $1" ;;
+	esac
+	done
+
+	iosSdkPath=`getSdkProperty $sdk Path`
+	iosSdkPlatformPath=`getSdkProperty $sdk PlatformPath`
+
+	platformName=`getPlatformName "$sdk"`
+	sdkVersion=`getSdkProperty "$sdk" "SDKVersion"`
+
+	[[ "$printWhich" == "false" ]] || \
+		panic 1 "SDK: ${platformName}${sdkVersion}
+Developer Tools: $DEVELOPER_DIR"
+
+	echo "Undoing modifications to $platformName $sdkVersion SDK..."
+
+	# restore SDKSettings.plist
+	
+	echo "Restoring SDK settings..."
+	#restoreFile "$iosSdkPath/SDKSettings.plist"
+
+	# remove symlinks to dumped private frameworks header files
+	echo "Removing symlinks to private frameworks header files..."
+	#removeSdkPrivateHeaderSymlinks "$sdk"
+
+	# restore xcspec files
+
+	echo "Removing specifications from platform..."
+	
+	xcspecFileNamePrefix="$platformName"	
+	[[ ! $xcspecFileNamePrefix =~ "Simulator" ]] || \
+		xcspecFileNamePrefix="iPhone Simulator "
+
+	#restoreFile "$iosSdkPlatformPath/Developer/Library/Xcode/Specifications/${xcspecFileNamePrefix}PackageTypes.xcspec"
+	#restoreFile "$iosSdkPlatformPath/Developer/Library/Xcode/Specifications/${xcspecFileNamePrefix}ProductTypes.xcspec"
+;;
+*) showUsage ;;
+esac
+
+# done #
+exit 0
