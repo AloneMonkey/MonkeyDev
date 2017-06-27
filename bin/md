@@ -1492,12 +1492,12 @@ function xcodeBuildPhase_Logos() # no args
 	local logosStdErr
 	local logosErr=0
 	
-	# verify use
 	[[ -f "$pbxProjectFilePath" ]] || \
 		panic 1 "Xcode project file not found: $pbxProjectFilePath"
 	
+	#没有安装Theos？
 	logosProcessor=`which logos.pl` || \
-		panic $? "Failed to locate Logos Processor. Is Theos installed? If not, see http://iphonedevwiki.net/index.php/Theos/Getting_Started."
+		panic $? "Failed to locate Logos Processor. Is Theos installed? If not, see https://github.com/theos/theos/wiki/Installation."
 	
 	# for *.xm project files, set known file-type and language specifications to Objective-C++
 	projectContainsXmFiles=`doesFileContain "$pbxProjectFilePath" '\/\* .+\.xm \*\/ *= *\{.*?isa *= *PBXFileReference\b'`
