@@ -12,7 +12,7 @@ export activeActionArg
 
 export MonkeyDevPath="/opt/MonkeyDev"
 #默认设备ip
-export DefaultDevice="127.0.0.1"
+export DefaultDevice="localhost"
 #默认端口号
 export DefaultPort="2222"
 
