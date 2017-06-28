@@ -43,6 +43,21 @@ ssh-keygen -t rsa -P ''
 ssh-copy-id -i /Users/用户名/.ssh/id_rsa root@IP
 ```
 
+### 设置说明
+
+|设置项|意义|
+|--|--|
+|MonkeyDevBuildPackageOnAnyBuild|每次build都生成deb包|
+|MonkeyDevCopyOnBuild|build的时将deb包拷贝到设备的/var/root/MonkeyDevBuilds/目录|
+|MonkeyDevDevice|目标设备的ip地址，默认USB连接，localhost|
+|MonkeyDevPort|目标设备的端口，默认2222|
+|MonkeyDevInstallOnAnyBuild|每次build都将deb安装到设备|
+|MonkeyDevInstallOnProfiling|点击Profile才将deb安装到设备|
+|MonkeyDevRespringOnInstall|安装的时候重启SpringBoard|
+|MonkeyDevUsePackageVersionPList|使用Supporting Files下面的PackageVersion.plist文件来指定deb版本|
+|MonkeyDevPath|MonkeyDev的安装路径，默认的，不用修改|
+|MonkeyDevTheosPath|theos的安装路径|
+
 ### 卸载
 
 ```
