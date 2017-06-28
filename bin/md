@@ -438,7 +438,6 @@ function buildPackage() # args: packageDir, outputDir, versionPList [, useZOptio
 	local outputDir="$2"
 	local versionPList="$3"
 	local useZOption="$4"
-	local subFileControlTxtToRemove="$packageDir/DEBIAN/control.txt"
 	local subFilesToRemove=(".DS_Store" "0xdeadfa11")
 	local packageFileName
 	local packageName
@@ -454,11 +453,6 @@ function buildPackage() # args: packageDir, outputDir, versionPList [, useZOptio
 	[[ "$versionPList" == "" ]] || \
 		requireFile "$versionPList" false
 
-	# cleanup #
-	[[ ! -f "$subFileControlTxtToRemove" ]] || \
-		rm -f "$subFileControlTxtToRemove" || \
-			panic $? "Failed to remove file $subFileControlTxtToRemove"
-	
 	for f in "${subFilesToRemove[@]}"; do
 		find "$packageDir" -type f -name "$f" -exec rm -f '{}' \; || \
 			panic $? "Failed to remove file $f"
