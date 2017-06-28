@@ -3,7 +3,7 @@
 export setCmd="set -eo pipefail"
 $setCmd
 
-export PATH=/opt/MonkeyDev/bin:/opt/theos/bin:/usr/local/bin:/usr/bin:/usr/sbin:/bin:/sbin:$PATH
+export PATH=/opt/MonkeyDev/bin:$MonkeyDevTheosPath/bin:/usr/local/bin:/usr/bin:/usr/sbin:/bin:/sbin:$PATH
 
 export scriptName="${0##*/}"
 export scriptVer="2.0"
