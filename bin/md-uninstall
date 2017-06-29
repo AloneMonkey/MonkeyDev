@@ -52,6 +52,42 @@ function removeTempData()
 	fi
 }
 
+function copyFile()
+{
+	cp -f "$1" "$2" || \
+		panic $? "Failed to copy file $1 to $2"
+}
+
+#还原文件
+function restoreFile()
+{
+	local filePath="$1"
+	local backedUpFilePath="${filePath}${backupFileExt}"
+	
+	if [[ -f "$backedUpFilePath" ]]; then
+		copyFile "$backedUpFilePath" "$filePath"	
+		rm -f "$backedUpFilePath"
+	fi
+}
+
+#获取SDK信息
+function getSdkProperty()
+{
+	$setCmd
+
+	local sdk="$1"
+	local propertyName="$2"
+
+	propertyValue=`xcodebuild -version -sdk $sdk $propertyName` || \
+		panic $? "Failed to get $sdk SDK property $propertyName"
+
+	[[ $propertyValue != "" ]] || \
+		panic 1 "Value of $sdk SDK property $propertyName cannot be empty"
+
+	# return #
+	echo "$propertyValue"
+}
+
 echo "Uninstalling MonkeyDev base, Xcode templates and framework header files..."
 	
 #删除文件夹
@@ -80,5 +116,12 @@ if [[ $userBashProfileFile != "" ]]; then
 	sed -i "" "s/^export PATH=.*${MonkeyDevPath//\//\\/}\\/bin:.*$//g" "$userBashProfileFile"
 	sed -i "" "s/^export PATH=.*\$MonkeyDevPath\\/bin:.*$//g" "$userBashProfileFile"
 fi
+
+iosSdkPlatformPath=`getSdkProperty iphoneos PlatformPath`
+
+specificationFile=$(cd $iosSdkPlatformPath/../../.. && pwd)/PlugIns/IDEiOSSupportCore.ideplugin/Contents/Resources/Embedded-Device.xcspec
+
+#还原文件
+restoreFile "$specificationFile"
 
 exit 0
