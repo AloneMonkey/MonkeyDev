@@ -7,6 +7,18 @@ iOSOpenDev修改版。
 
 ### 安装
 
+如果要对指定Xcode安装:
+
+```
+sudo xcode-select -s /Applications/Xcode-beta.app
+```
+
+默认:
+
+```
+xcode-select -p
+```
+
 ```
 git clone https://github.com/AloneMonkey/MonkeyDev.git
 cd MonkeyDev/bin
