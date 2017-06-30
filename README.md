@@ -29,7 +29,7 @@ select the Xcode to install:
 sudo xcode-select -s /Applications/Xcode-beta.app
 ```
 
-default Xcode to install:
+default Xcode to install:
 
 ```
 xcode-select -p
@@ -47,7 +47,7 @@ sudo ./md-install
 
 Create a new project, Select a template to start。
 
-Compile: `Commonand + B`
+Compile: `Commonand + B`
 
 Install: 
 
