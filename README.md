@@ -1,23 +1,41 @@
 # MonkeyDev
 
-iOSOpenDev修改版。
+[English Doc](README.md)
+|
+[中文文档](README-zh.md)
 
-* 安装更简单
-* 支持最新版theos
+A modified version of iOSOpenDev
 
-### 安装
+* easy to install
+* support the latest version of theos
+* support CaptainHook Tweak、Logos Tweak、Command-line Tool
 
-如果要对指定Xcode安装:
+### Requirements
+
+* Install the latest [theos](https://github.com/theos/theos/)
+* brew install ldid
+* SSH into your jailbroken iDevice without a password
+
+```
+ssh-keygen -t rsa -P ''
+ssh-copy-id -i /Users/username/.ssh/id_rsa root@ip
+```
+
+### Installation
+
+select the Xcode to install:
 
 ```
 sudo xcode-select -s /Applications/Xcode-beta.app
 ```
 
-默认:
+default Xcode to install:
 
 ```
 xcode-select -p
 ```
+
+install:
 
 ```
 git clone https://github.com/AloneMonkey/MonkeyDev.git
@@ -25,53 +43,61 @@ cd MonkeyDev/bin
 sudo ./md-install
 ```
 
-### 使用
-新建项目，在iOS模板最下面可以找到`MonkeyDev`模板，暂时只支持`CaptainHook Tweak`和`Logos Tweak`。
+### Usage
 
-`Logos Tweak`会自动链接`CydiaSubstrate`，不再需要手动链接。
+Create a new project, Select a template to start。
 
-`Commonand + B`编译，不安装，设置`MonkeyDevInstallOnAnyBuild`为`YES`，会自动打包安装到设备。
+Compile: `Commonand + B`
 
-`Command + Shift + i`编译安装，但是这种方式是`Release`模式，看不到log输出。
+Install: 
 
-在编译设置中可以自定义设备ip和ssh的端口:
+* set `MonkeyDevInstallOnAnyBuild` to `YES`， then `Commonand + B` with `Debug`
+* `Command + Shift + i` with `Release`， disable log print
+
+Custom Build Settings:
 
 ![image](http://7xtdl4.com1.z0.glb.clouddn.com/script_1498661304679.png)
 
-不设置的话，ip默认为`localhost`，port默认为`2222`。
+default value:
+ip: `localhost`
+port: `2222`
 
-当然你也可以在`~/.zshrc`或其它profile里面设置`MonkeyDevDevice`和`MonkeyDevPort`。
+The Bash profile file also can export variable。
 
-查看log的会可以使用`idevicesyslog`查看，毕竟带颜色。。。。
-
-### 注意
-
-* 本工具配合最新[theos](https://github.com/theos/theos/)使用。
-* 安装 brew install ldid
-* 设备免密码登录
+`~/.zshrc` or ` ~/.bash_profile` or others.
 
 ```
-ssh-keygen -t rsa -P ''
-ssh-copy-id -i /Users/用户名/.ssh/id_rsa root@IP
+export MonkeyDevDevice=
+export MonkeyDevPort=
 ```
 
-### 设置说明
+use `idevicesyslog` to show log print.
 
-|设置项|意义|
+### Custom Settings
+
+|setting|meaning|
 |--|--|
-|MonkeyDevBuildPackageOnAnyBuild|每次build都生成deb包|
-|MonkeyDevCopyOnBuild|build的时将deb包拷贝到设备的/var/root/MonkeyDevBuilds/目录|
-|MonkeyDevDevice|目标设备的ip地址，默认USB连接，localhost|
-|MonkeyDevPort|目标设备的端口，默认2222|
-|MonkeyDevInstallOnAnyBuild|每次build都将deb安装到设备|
-|MonkeyDevInstallOnProfiling|点击Profile才将deb安装到设备|
-|MonkeyDevRespringOnInstall|安装的时候重启SpringBoard|
-|MonkeyDevUsePackageVersionPList|使用Supporting Files下面的PackageVersion.plist文件来指定deb版本|
-|MonkeyDevPath|MonkeyDev的安装路径，默认的，不用修改|
-|MonkeyDevTheosPath|theos的安装路径|
+|MonkeyDevBuildPackageOnAnyBuild|create package on any type of build. |
+|MonkeyDevCopyOnBuild|during any build, copy the target (executable) to the device at /var/root/iOSOpenDevBuilds/[|
+|MonkeyDevDevice|the host name (e.g. MyiPhone.local) or IP address (e.g. 192.168.1.101) of the device you wish to use during development.|
+|MonkeyDevPort|connect port of the device|
+|MonkeyDevInstallOnAnyBuild|install the package on the device on any type of build. |
+|MonkeyDevInstallOnProfiling|during a Build For Profiling (Command-Shift-I or Product > Build For > Build For Profiling), build the project's Debian package, copy the package to the device at /var/root/MonkeyDevPackages (using SSH) and install the package (using SSH and running dpkg locally on the device)|
+|MonkeyDevRespringOnInstall|after the Debian package has been built and installed, respring (i.e. kill and relaunch SpringBoard) the device.|
+|MonkeyDevUsePackageVersionPList|It indicates whether to use the target's PackageVersion.plist file to set the Debian package's control file's Version field only. |
+|MonkeyDevPath|Do not change this. This is the path to MonkeyDev which is used by other build settings.|
+|MonkeyDevTheosPath|the path to theos installed|
 
-### 卸载
+### uninstall
 
 ```
 sudo ./md-uninstall
 ```
+
+### changelog
+
+v 1.0
+
+* add CaptainHook Tweak、Logos Tweak、Command-line Tool support
+* auto link CydiaSubstrate.framwork
+* set default value to device ip and port
