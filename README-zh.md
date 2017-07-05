@@ -10,6 +10,8 @@ iOSOpenDev修改版。
 * 支持最新版theos
 * 支持CaptainHook Tweak、Logos Tweak、Command-line Tool
 
+在最新的theos和Xcode 9测试正常。
+
 ### 准备
 
 * 安装最新[theos](https://github.com/theos/theos/wiki)
@@ -43,7 +45,9 @@ sudo ./md-install
 ```
 
 ### 使用
-新建项目，在iOS模板最下面可以找到`MonkeyDev`模板，暂时只支持`CaptainHook Tweak`和`Logos Tweak`。
+新建项目，在iOS模板最下面可以找到`MonkeyDev`模板，已支持`CaptainHook Tweak`、`Logos Tweak`和`Command-line Tool`。
+
+![image](http://7xtdl4.com1.z0.glb.clouddn.com/script_1499260720390.png)
 
 `Logos Tweak`会自动链接`CydiaSubstrate`，不再需要手动链接。
 

@@ -10,6 +10,8 @@ A modified version of iOSOpenDev
 * support the latest version of theos
 * support CaptainHook Tweak、Logos Tweak、Command-line Tool
 
+run with the latest theos and Xcode 9 is ok。
+
 ### Requirements
 
 * Install the latest [theos](https://github.com/theos/theos/)
@@ -47,6 +49,8 @@ sudo ./md-install
 
 Create a new project, Select a template to start。
 
+![image](http://7xtdl4.com1.z0.glb.clouddn.com/script_1499260720390.png)
+
 Compile: `Commonand + B`
 
 Install: 
@@ -78,7 +82,7 @@ use `idevicesyslog` to show log print.
 |setting|meaning|
 |--|--|
 |MonkeyDevBuildPackageOnAnyBuild|create package on any type of build. |
-|MonkeyDevCopyOnBuild|during any build, copy the target (executable) to the device at /var/root/iOSOpenDevBuilds/[|
+|MonkeyDevCopyOnBuild|during any build, copy the target (executable) to the device at /var/root/iOSOpenDevBuilds/|
 |MonkeyDevDevice|the host name (e.g. MyiPhone.local) or IP address (e.g. 192.168.1.101) of the device you wish to use during development.|
 |MonkeyDevPort|connect port of the device|
 |MonkeyDevInstallOnAnyBuild|install the package on the device on any type of build. |
