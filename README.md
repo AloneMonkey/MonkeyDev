@@ -72,7 +72,7 @@ The Bash profile file also can export variable。
 
 ```
 export MonkeyDevDeviceIP=
-export MonkeyDevPort=
+export MonkeyDevDevicePort=
 ```
 
 use `idevicesyslog` to show log print.
@@ -84,7 +84,7 @@ use `idevicesyslog` to show log print.
 |MonkeyDevBuildPackageOnAnyBuild|create package on any type of build. |
 |MonkeyDevCopyOnBuild|during any build, copy the target (executable) to the device at /var/root/iOSOpenDevBuilds/|
 |MonkeyDevDeviceIP|the host name (e.g. MyiPhone.local) or IP address (e.g. 192.168.1.101) of the device you wish to use during development.|
-|MonkeyDevPort|connect port of the device|
+|MonkeyDevDevicePort|connect port of the device|
 |MonkeyDevInstallOnAnyBuild|install the package on the device on any type of build. |
 |MonkeyDevInstallOnProfiling|during a Build For Profiling (Command-Shift-I or Product > Build For > Build For Profiling), build the project's Debian package, copy the package to the device at /var/root/MonkeyDevPackages (using SSH) and install the package (using SSH and running dpkg locally on the device)|
 |MonkeyDevRespringOnInstall|after the Debian package has been built and installed, respring (i.e. kill and relaunch SpringBoard) the device.|

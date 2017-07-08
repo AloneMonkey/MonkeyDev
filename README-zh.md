@@ -61,11 +61,11 @@ sudo ./md-install
 
 不设置的话，ip默认为`localhost`，port默认为`2222`。
 
-当然你也可以在`~/.zshrc`或其它profile里面设置`MonkeyDevDevice`和`MonkeyDevPort`。
+当然你也可以在`~/.zshrc`或其它profile里面设置`MonkeyDevDeviceIP`和`MonkeyDevDevicePort`。
 
 ```
-export MonkeyDevDevice=
-export MonkeyDevPort=
+export MonkeyDevDeviceIP=
+export MonkeyDevDevicePort=
 ```
 
 查看log的会可以使用`idevicesyslog`查看，毕竟带颜色。。。。
@@ -76,8 +76,8 @@ export MonkeyDevPort=
 |--|--|
 |MonkeyDevBuildPackageOnAnyBuild|每次build都生成deb包|
 |MonkeyDevCopyOnBuild|build的时将deb包拷贝到设备的/var/root/MonkeyDevBuilds/目录|
-|MonkeyDevDevice|目标设备的ip地址，默认USB连接，localhost|
-|MonkeyDevPort|目标设备的端口，默认2222|
+|MonkeyDevDeviceIP|目标设备的ip地址，默认USB连接，localhost|
+|MonkeyDevDevicePort|目标设备的端口，默认2222|
 |MonkeyDevInstallOnAnyBuild|每次build都将deb安装到设备|
 |MonkeyDevInstallOnProfiling|点击Profile才将deb安装到设备|
 |MonkeyDevRespringOnInstall|安装的时候重启SpringBoard|
