@@ -514,12 +514,12 @@ function managePackageOnDevice() # args: manageAction, packageFileOrName, hostAd
 	
 	if [[ $hostAddress == "" ]]; then
 	
-		requireExportedVariable "MonkeyDevDevice"
+		requireExportedVariable "MonkeyDevDeviceIP"
 		
-		hostAddress="$MonkeyDevDevice"
+		hostAddress="$MonkeyDevDeviceIP"
 		
 		[[ $hostAddress != "" ]] || \
-			hostAddress="$DefaultDevice" && echo "Host address not provided and environment variable MonkeyDevDevice is not set or is empty, use default $DefaultDevice"
+			hostAddress="$DefaultDevice" && echo "Host address not provided and environment variable MonkeyDevDeviceIP is not set or is empty, use default $DefaultDevice"
 	fi
 
 	if [[ $hostPort == "" ]]; then
@@ -562,12 +562,12 @@ function runFuncOnDevice() # args: function, hostAddress, hostPort
 		
 	if [[ $hostAddress == "" ]]; then
 	
-		requireExportedVariable "MonkeyDevDevice"
+		requireExportedVariable "MonkeyDevDeviceIP"
 		
-		hostAddress="$MonkeyDevDevice"
+		hostAddress="$MonkeyDevDeviceIP"
 		
 		[[ $hostAddress != "" ]] || \
-			hostAddress="$DefaultDevice" && echo "Host address not provided and environment variable MonkeyDevDevice is not set or is empty, use default $DefaultDevice"
+			hostAddress="$DefaultDevice" && echo "Host address not provided and environment variable MonkeyDevDeviceIP is not set or is empty, use default $DefaultDevice"
 	fi
 
 	if [[ $hostPort == "" ]]; then
@@ -790,11 +790,11 @@ function xcodeBuildPhase() # no args
 		packageInstallSource="$TARGET_BUILD_DIR/$EXECUTABLE_FOLDER_PATH"
 	fi
 
-	#如果编译设置里面MonkeyDevDevice为空的话，就从用户的profile里面去拿，否则使用默认值
-	[[ $MonkeyDevDevice != "" ]] || \
-		MonkeyDevDevice=`getBashProfileEnvVarValue "MonkeyDevDevice"`
-	[[ $MonkeyDevDevice != "" ]] || \
-		MonkeyDevDevice="$DefaultDevice" && echo "use default $DefaultDevice"
+	#如果编译设置里面MonkeyDevDeviceIP为空的话，就从用户的profile里面去拿，否则使用默认值
+	[[ $MonkeyDevDeviceIP != "" ]] || \
+		MonkeyDevDeviceIP=`getBashProfileEnvVarValue "MonkeyDevDeviceIP"`
+	[[ $MonkeyDevDeviceIP != "" ]] || \
+		MonkeyDevDeviceIP="$DefaultDevice" && echo "use default $DefaultDevice"
 
 	#如果编译设置里面MonkeyDevPort为空的话，就从用户的profile里面去拿，否则使用默认值
 	[[ $MonkeyDevPort != "" ]] || \
@@ -843,11 +843,11 @@ function xcodeBuildPhase() # no args
 	if [[ "$MonkeyDevCopyOnBuild" == "YES" ]]; then
 	
 		#拷贝到设备的/var/root/MonkeyDevBuilds/
-		if [[ "$MonkeyDevDevice" != "" ]]; then
-			copyFileToDevice "$builtExecutable" "/var/root/MonkeyDevBuilds/$PROJECT_NAME" "$MonkeyDevDevice" "$MonkeyDevPort"
+		if [[ "$MonkeyDevDeviceIP" != "" ]]; then
+			copyFileToDevice "$builtExecutable" "/var/root/MonkeyDevBuilds/$PROJECT_NAME" "$MonkeyDevDeviceIP" "$MonkeyDevPort"
 		else
-			# build setting MonkeyDevDevice is empty #
-			panic 1 "Unable to copy executable to device since build setting MonkeyDevDevice is not set or is empty and it is not exported in your Bash personal initialization file"
+			# build setting MonkeyDevDeviceIP is empty #
+			panic 1 "Unable to copy executable to device since build setting MonkeyDevDeviceIP is not set or is empty and it is not exported in your Bash personal initialization file"
 		fi
 	
 	fi
@@ -872,23 +872,23 @@ function xcodeBuildPhase() # no args
 				# if build setting MonkeyDevInstallOnProfiling is enabled, installation of package is enabled...
 				if [[ "$MonkeyDevInstallOnProfiling" == "YES"  || "$MonkeyDevInstallOnAnyBuild" == "YES" ]]; then
 				
-					# if MonkeyDevDevice has a value, install package on device...
-					if [[ "$MonkeyDevDevice" != "" ]]; then
+					# if MonkeyDevDeviceIP has a value, install package on device...
+					if [[ "$MonkeyDevDeviceIP" != "" ]]; then
 	
 						# get package file name #
 						packageFileName="`getPackageFileNameUsingControlFile \"$packageDirectory/DEBIAN/control\"`.deb"
 							
 						# install package on device #					
-						managePackageOnDevice "install" "$allPackagesDir/$packageFileName" "$MonkeyDevDevice" "$MonkeyDevPort"
+						managePackageOnDevice "install" "$allPackagesDir/$packageFileName" "$MonkeyDevDeviceIP" "$MonkeyDevPort"
 						
 						# respring? #
 						if [[ "$MonkeyDevRespringOnInstall" == "YES" ]]; then
 							echo "Respringing device..."
-							runFuncOnDevice "respring" "$MonkeyDevDevice" "$MonkeyDevPort" 
+							runFuncOnDevice "respring" "$MonkeyDevDeviceIP" "$MonkeyDevPort" 
 						fi
 					else
-						# build setting MonkeyDevDevice is empty #
-						panic 1 "Unable to install package on device since build setting MonkeyDevDevice is not set or is empty and it is not exported in your Bash personal initialization file"
+						# build setting MonkeyDevDeviceIP is empty #
+						panic 1 "Unable to install package on device since build setting MonkeyDevDeviceIP is not set or is empty and it is not exported in your Bash personal initialization file"
 					fi
 				else
 					# build setting MonkeyDevInstallOnProfiling is disabled #

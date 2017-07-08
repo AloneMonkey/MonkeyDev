@@ -330,7 +330,7 @@ echo "Modifying Bash personal initialization file..."
 userBashProfileFile=`determineUserBashProfileFile`
 
 addToFileIfMissing "$userBashProfileFile" "^(export)? *MonkeyDevPath=.*" "export MonkeyDevPath=$MonkeyDevPath"
-addToFileIfMissing "$userBashProfileFile" "^(export)? *MonkeyDevDevice=.*" "export MonkeyDevDevice="
+addToFileIfMissing "$userBashProfileFile" "^(export)? *MonkeyDevDeviceIP=.*" "export MonkeyDevDeviceIP="
 addToFileIfMissing "$userBashProfileFile" "^(export)? *PATH=.*(\\\$MonkeyDevPath\\/bin|${MonkeyDevPath//\//\\/}\\/bin).*" "export PATH=$MonkeyDevPath/bin:\$PATH"
 
 #支持iphoneos command line tools

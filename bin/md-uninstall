@@ -112,7 +112,7 @@ done
 	
 if [[ $userBashProfileFile != "" ]]; then
 	sed -i "" "s/^export MonkeyDevPath=.*$//g" "$userBashProfileFile"
-	sed -i "" "s/^export MonkeyDevDevice=.*$//g" "$userBashProfileFile"
+	sed -i "" "s/^export MonkeyDevDeviceIP=.*$//g" "$userBashProfileFile"
 	sed -i "" "s/^export PATH=.*${MonkeyDevPath//\//\\/}\\/bin:.*$//g" "$userBashProfileFile"
 	sed -i "" "s/^export PATH=.*\$MonkeyDevPath\\/bin:.*$//g" "$userBashProfileFile"
 fi
