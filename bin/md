@@ -336,62 +336,6 @@ function readDefaultsValue() # args: plistPath, propertyName
 	echo "$value"
 }
 
-#从plist获取版本
-function getVersionFromVersionPList() # args: plistPath
-{
-	$setCmd
-	
-	local plistPath="$1"
-	local version
-	local major
-	local minor
-	local bugFix
-	local stage
-	local pkgRev
-	
-	major=`readDefaultsValue "$plistPath" "Major"`
-	minor=`readDefaultsValue "$plistPath" "Minor"`
-	bugFix=`readDefaultsValue "$plistPath" "BugFix"`
-	stage=`readDefaultsValue "$plistPath" "Stage"`
-	pkgRev=`readDefaultsValue "$plistPath" "PackageRevision"`
-
-	version="$major.$minor"
-		
-	[[ "$bugFix" == "" ]] || version+=".$bugFix"
-	[[ "$stage" == "" ]] || version+="$stage"
-	[[ "$pkgRev" == "" ]] || version+="-$pkgRev"
-		
-	# return #
-	echo "$version"
-}
-
-#给deb设置版本
-function setControlFileVersionFieldUsingVersionPList() # args: controlFile, plistPath
-{
-	local controlFile="$1"
-	local plistPath="$2"
-	local versionReadFromPList
-	
-	requireFile "$controlFile" false
-	requireFile "$plistPath" false
-	
-	# read plist to get version #
-	versionReadFromPList=`getVersionFromVersionPList "$plistPath"`
-	
-	[[ $versionReadFromPList != "" ]] || \
-		panic 1 "Failed to read version from $plistPath"
-
-	# write version to control file	#
-
-	echo -n "Setting control file $controlFile Version field to $versionReadFromPList using $plistPath... "
-
-	sed -i "" "s/Version:.*/Version: $versionReadFromPList/g" "$controlFile" || \
-		panic $? "Failed."
-
-	# success #
-	echo "Done."
-}
-
 #获取control文件信息
 function getControlFieldValue() # args: controlFile, fieldName [, isRequired]
 {
@@ -432,12 +376,11 @@ function getPackageFileNameUsingControlFile() # args: controlFile
 }
 
 #打包
-function buildPackage() # args: packageDir, outputDir, versionPList [, useZOption]
+function buildPackage() # args: packageDir, outputDir [, useZOption]
 {
 	local packageDir="$1"
 	local outputDir="$2"
-	local versionPList="$3"
-	local useZOption="$4"
+	local useZOption="$3"
 	local subFilesToRemove=(".DS_Store" "0xdeadfa11")
 	local packageFileName
 	local packageName
@@ -449,9 +392,6 @@ function buildPackage() # args: packageDir, outputDir, versionPList [, useZOptio
 	requireDir "$packageDir"
 
 	requireDir "$outputDir" true
-
-	[[ "$versionPList" == "" ]] || \
-		requireFile "$versionPList" false
 
 	for f in "${subFilesToRemove[@]}"; do
 		find "$packageDir" -type f -name "$f" -exec rm -f '{}' \; || \
@@ -467,11 +407,6 @@ function buildPackage() # args: packageDir, outputDir, versionPList [, useZOptio
 	changeMode 0755 "$packageDir/DEBIAN/prerm"
 	changeMode 0755 "$packageDir/DEBIAN/postrm"
 	
-	# set control file version field #
-	
-	[[ "$versionPList" == "" ]] || \
-		setControlFileVersionFieldUsingVersionPList "$packageDir/DEBIAN/control" "$versionPList"
-
 	# determine package name #
 	packageName=`getPackageFileNameUsingControlFile "$packageDir/DEBIAN/control"`
 		
@@ -837,8 +772,6 @@ function xcodeBuildPhase() # no args
 	local packageDirectory="$PROJECT_DIR/$TARGET_NAME/Package"
 	#安装的目录
 	local packageInstallPath="$packageDirectory$INSTALL_PATH"
-	#deb版本文件
-	local packageVersionPListPath="$PROJECT_DIR/$TARGET_NAME/PackageVersion.plist"
 	#存放所有deb目录
 	local allPackagesDir="$PROJECT_DIR/Packages"
 	#编译产品输出目录
@@ -847,7 +780,6 @@ function xcodeBuildPhase() # no args
 	local latestBuildSymlink="$PROJECT_DIR/LatestBuild"
 	local stripBin
 	local stripOption
-	local versionPListPath
 	local packageFileName
 	
 	#目标文件路径
@@ -930,13 +862,7 @@ function xcodeBuildPhase() # no args
 		#拷贝目标文件到/Package/Library/MobileSubstrate/DynamicLibraries
 		copyFile "$packageInstallSource" "$packageInstallPath"
 
-		#生成deb
-		[[ "$MonkeyDevUsePackageVersionPList" != "YES" ]] || \
-			versionPListPath="$packageVersionPListPath"			
-		
-		echo "$versionPListPath"
-
-		buildPackage "$packageDirectory" "$allPackagesDir" "$versionPListPath" true
+		buildPackage "$packageDirectory" "$allPackagesDir" true
 		
 		#profile或者用户设置了build安装
 		if [[ "$CONFIGURATION" == "Release" && "$VALIDATE_PRODUCT" == "YES" ]] || [[ "$MonkeyDevInstallOnAnyBuild" == "YES" ]]; then
