@@ -57,7 +57,7 @@ sudo ./md-install
 
 在编译设置中可以自定义设备ip和ssh的端口:
 
-![image](http://7xtdl4.com1.z0.glb.clouddn.com/script_1498661304679.png)
+![image](http://7xtdl4.com1.z0.glb.clouddn.com/script_1499525830459.png)
 
 不设置的话，ip默认为`localhost`，port默认为`2222`。
 

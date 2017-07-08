@@ -60,7 +60,7 @@ Install:
 
 Custom Build Settings:
 
-![image](http://7xtdl4.com1.z0.glb.clouddn.com/script_1498661304679.png)
+![image](http://7xtdl4.com1.z0.glb.clouddn.com/script_1499525830459.png)
 
 default value:
 ip: `localhost`
