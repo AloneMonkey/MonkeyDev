@@ -805,7 +805,6 @@ function xcodeBuildPhase() # no args
 
 	#验证必要文件的存在
 	requireFile "$builtExecutable" false
-	requireDir "$packageDirectory"
 	
 	#创建最后一个编译的符号链接
 	createSymlink "$builtProductsDir" "$latestBuildSymlink"
@@ -854,6 +853,7 @@ function xcodeBuildPhase() # no args
 
 	#如果是profie或者用户设置了每次build都install或package，生成deb
 	if [[ "$CONFIGURATION" == "Release" && "$VALIDATE_PRODUCT" == "YES" ]] || [[ "$MonkeyDevInstallOnAnyBuild" == "YES" ]] || [[ "$MonkeyDevBuildPackageOnAnyBuild" == "YES" ]]; then
+		requireDir "$packageDirectory"
 		#准备打包
 		echo "Copying $packageInstallSource to package directory at $packageInstallPath..."
 		
