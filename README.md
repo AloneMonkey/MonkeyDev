@@ -64,7 +64,7 @@ Custom Build Settings:
 
 default value:
 ip: `localhost`
-port: `2222`
+port: `22`
 
 The Bash profile file also can export variable。
 

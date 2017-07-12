@@ -14,7 +14,7 @@ export MonkeyDevPath="/opt/MonkeyDev"
 #默认设备ip
 export DefaultDeviceIP="localhost"
 #默认端口号
-export DefaultDevicePort="2222"
+export DefaultDevicePort="22"
 
 export userName="${SUDO_USER-$USER}"
 export userGroup=`id -g $userName`

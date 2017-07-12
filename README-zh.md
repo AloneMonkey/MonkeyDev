@@ -59,7 +59,7 @@ sudo ./md-install
 
 ![image](http://7xtdl4.com1.z0.glb.clouddn.com/script_1499525830459.png)
 
-不设置的话，ip默认为`localhost`，port默认为`2222`。
+不设置的话，ip默认为`localhost`，port默认为`22`。
 
 当然你也可以在`~/.zshrc`或其它profile里面设置`MonkeyDevDeviceIP`和`MonkeyDevDevicePort`。
 
@@ -77,7 +77,7 @@ export MonkeyDevDevicePort=
 |MonkeyDevBuildPackageOnAnyBuild|每次build都生成deb包|
 |MonkeyDevCopyOnBuild|build的时将deb包拷贝到设备的/var/root/MonkeyDevBuilds/目录|
 |MonkeyDevDeviceIP|目标设备的ip地址，默认USB连接，localhost|
-|MonkeyDevDevicePort|目标设备的端口，默认2222|
+|MonkeyDevDevicePort|目标设备的端口，默认22|
 |MonkeyDevInstallOnAnyBuild|每次build都将deb安装到设备|
 |MonkeyDevInstallOnProfiling|点击Profile才将deb安装到设备|
 |MonkeyDevRespringOnInstall|安装的时候重启SpringBoard|
