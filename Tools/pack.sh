@@ -34,6 +34,8 @@ else
 fi
 
 # copy default framewrok
+cp -rf "$BUILT_PRODUCTS_DIR/lib""$TARGET_NAME""Dylib.dylib" "$TARGET_APP_FRAMEWORKS_PATH"
+
 TARGET_APP_FRAMEWORKS_PATH="$BUILD_APP_PATH/Frameworks/"
 cp -rf "$FRAMEWORKS_TO_INJECT_PATH" "$TARGET_APP_FRAMEWORKS_PATH"
 
