@@ -23,6 +23,10 @@ if [[ "$TARGET_IPA_PATH" != "" ]]; then
 fi
 
 BUILD_APP_PATH="$BUILT_PRODUCTS_DIR/$TARGET_NAME.app"
+
+rm -rf "$BUILD_APP_PATH" || true
+mkdir -p "$BUILD_APP_PATH" || true
+
 TARGET_APP_PATH=$(find "$SRCROOT/$TARGET_NAME/TargetApp" -type d | grep ".app$" | head -n 1)
 
 echo "target app:$TARGET_APP_PATH"
@@ -68,14 +72,4 @@ do
     /usr/bin/codesign --force --sign "$EXPANDED_CODE_SIGN_IDENTITY" "$FRAMEWORK"
 done
 fi
-
-MOBILEPROVISION_PATH=$(find "$BUILD_APP_PATH/" -type f | grep ".mobileprovision$" | head -n 1)
-
-if [ -f "$MOBILEPROVISION_PATH" ]; then
-	/usr/bin/security cms -D -i "$MOBILEPROVISION_PATH" > "$TEMP_PATH/"profile.plist
-	/usr/libexec/PlistBuddy -x -c 'Print :Entitlements' "$TEMP_PATH/"profile.plist > "$TEMP_PATH/"entitlements.plist
-	/usr/bin/codesign --force --sign "$EXPANDED_CODE_SIGN_IDENTITY" --entitlements "$TEMP_PATH/"entitlements.plist "$BUILD_APP_PATH"
-fi
-
-
 
