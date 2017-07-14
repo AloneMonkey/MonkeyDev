@@ -1,0 +1,141 @@
+#!/bin/bash
+
+#set -e表示一旦脚本中有命令的返回值为非0，则脚本立即退出，后续命令不再执行;
+#set -o pipefail表示在管道连接的命令序列中，只要有任何一个命令返回非0值，则整个管道返回非0值，即使最后一个命令返回0.
+export setCmd="set -eo pipefail"
+$setCmd
+
+#导出环境变量
+export PATH=/opt/MonkeyDev/bin:/usr/local/bin:/usr/bin:/usr/sbin:/bin:/sbin:$PATH
+
+#脚本名称和版本
+export scriptName="${0##*/}"
+export scriptVer="2.0"
+
+#本地存储文件的目录
+export MonkeyDevPath="/opt/MonkeyDev"
+
+#获取用户名、用户组、用户目录、和profile文件
+export userName="${SUDO_USER-$USER}"
+export userGroup=`id -g $userName`
+export userHome=`eval echo ~$userName`
+
+#获取临时文件名
+export tempDirsFile="`mktemp -d -t $scriptName`/tempdirs"
+touch "$tempDirsFile"
+
+#把LANG变量从当前环境中删除
+unset LANG
+
+#出错退出
+function cleanup()
+{
+	local exitCode=$?
+	set +e
+	trap - $signals
+	removeTempData
+	exit $exitCode
+}
+
+function panic()
+{
+	local exitCode=$1
+	set +e
+	shift
+	[[ "$@" == "" ]] || echo "$@" >&2
+	exit $exitCode
+}
+
+export signals="0 1 2 3 15"
+#当shell接收到signals指定的信号时，执行cleanup命令
+trap cleanup $signals
+
+function removeTempData()
+{
+	local tempDirs
+	if [[ -f "$tempDirsFile" ]]; then
+		tempDirs=(`cat "$tempDirsFile"`)
+		for td in "${tempDirs[@]}"; do
+			rm -rf "$td" || true
+		done
+		rm -rf "`dirname $tempDirsFile`" || true
+	fi
+}
+function getTempDir()
+{
+	$setCmd
+	local tempDir
+	tempDir=`mktemp -d -t $scriptName` || \
+		panic $? "Failed to create temporary directory"
+	echo "$tempDir" >> "$tempDirsFile" || \
+		panic $? "Failed to echo into $tempDirsFile"
+	echo "$tempDir"
+}
+
+#下载文件
+function downloadFile() # args: sourceUrl, targetPath
+{
+	local sourceUrl="$1"
+	local targetPath="$2"
+	local curlPath
+
+	mkdir -p "${targetPath%/*}" || \
+		panic $? "Failed to make directory: ${targetPath%/*}"
+
+	curlPath=`which curl` || \
+		panic $? "Failed to get curl path"
+
+	"$curlPath" --silent --insecure --output "$targetPath" "$sourceUrl" || \
+		panic $? "Failed to download $sourceUrl to $targetPath"
+}
+
+#解压文件
+function extractTar() # args: tarPath, outputPath
+{
+	local tarPath="$1"
+	local outputPath="$2"
+	
+	tar -C "$outputPath" -zxf "$tarPath" || \
+		panic $? "Failed to extract $tarPath to $outputPath"
+}
+
+#下载github文件
+function downloadGithubTarball() # args: url, outputDir, title
+{
+	$setcmd
+
+	local url="$1"
+	local outputDir="$2"
+	local title="$3"
+	local tempDirForTar
+	local tempDirForFiles
+	local untardDir
+	local tarFile="file.tar.gz"
+
+	echo "Downloading $title from Github..."
+
+	tempDirForTar=`getTempDir`
+	tempDirForFiles=`getTempDir`
+	
+	downloadFile "$url" "$tempDirForTar/$tarFile"
+	
+	extractTar "$tempDirForTar/$tarFile" "$tempDirForFiles"
+
+	untardDir=`find "$tempDirForFiles/"* -type d -depth 0` || \
+		panic $? "Failed to get untar'ed directory name of $tempDirForTar/$tarFile"
+
+	mkdir -p "$outputDir" || \
+		panic $? "Failed to make directory: $outputDir"
+
+	cp -fR "$untardDir/"* "$outputDir/"
+}
+
+# start it
+rm -rf "$MonkeyDevPath" || \
+	panic $? "Failed to remove directory: $MonkeyDevPath"
+
+#更新一些基础文件和模板文件
+downloadGithubTarball "https://codeload.github.com/AloneMonkey/MonkeyDev/tar.gz/master" "$MonkeyDevPath" "MonkeyDev base"
+downloadGithubTarball "https://codeload.github.com/AloneMonkey/MonkeyDev-Xcode-Templates/tar.gz/master" "$MonkeyDevPath/templates" "Xcode templates"
+
+exit 0

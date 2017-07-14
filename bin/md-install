@@ -295,6 +295,7 @@ function writeDictToSpecification(){ #args: filePath, content
 	/usr/libexec/PlistBuddy -x -c "merge $tempfile 0" "$filePath" > /dev/null
 }
 
+# start it
 # 创建/opt/MonkeyDev
 mkdir -p "$MonkeyDevPath" || \
 	panic $? "Failed to make directory: $MonkeyDevPath"
@@ -302,10 +303,6 @@ mkdir -p "$MonkeyDevPath" || \
 #下载一些基础文件和模板文件
 downloadGithubTarball "https://codeload.github.com/AloneMonkey/MonkeyDev/tar.gz/master" "$MonkeyDevPath" "MonkeyDev base"
 downloadGithubTarball "https://codeload.github.com/AloneMonkey/MonkeyDev-Xcode-Templates/tar.gz/master" "$MonkeyDevPath/templates" "Xcode templates"
-
-#创建空的frameworks目录
-mkdir -p "$MonkeyDevPath/frameworks" || \
-	panic $? "Failed to make directory: $MonkeyDevPath/frameworks"
 
 #创建符号链接
 echo "Creating symlink to Xcode templates..."
