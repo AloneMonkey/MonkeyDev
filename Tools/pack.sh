@@ -69,3 +69,13 @@ do
 done
 fi
 
+MOBILEPROVISION_PATH=$(find "$BUILD_APP_PATH/" -type f | grep ".mobileprovision$" | head -n 1)
+
+if [ -f "$MOBILEPROVISION_PATH" ]; then
+	/usr/bin/security cms -D -i "$MOBILEPROVISION_PATH" > "$TEMP_PATH/"profile.plist
+	/usr/libexec/PlistBuddy -x -c 'Print :Entitlements' "$TEMP_PATH/"profile.plist > "$TEMP_PATH/"entitlements.plist
+	/usr/bin/codesign --force --sign "$EXPANDED_CODE_SIGN_IDENTITY" --entitlements "$TEMP_PATH/"entitlements.plist "$BUILD_APP_PATH"
+fi
+
+
+
