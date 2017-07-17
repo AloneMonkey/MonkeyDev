@@ -93,6 +93,12 @@ sudo ./md-uninstall
 
 ### 更新日志
 
+v 2.0
+
+* 增加非越狱app集成SDK
+* 修改默认设置，默认端口恢复为22
+* 默认build安装
+
 v 1.0
 
 * 增加CaptainHook Tweak、Logos Tweak、Command-line Tool

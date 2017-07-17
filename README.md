@@ -100,6 +100,12 @@ sudo ./md-uninstall
 
 ### changelog
 
+v 2.0
+
+* Patch iOS Apps, Without Jailbreak.
+* default port to 22
+* any build will install
+
 v 1.0
 
 * add CaptainHook Tweak、Logos Tweak、Command-line Tool support
