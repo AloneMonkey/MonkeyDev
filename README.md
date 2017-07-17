@@ -6,6 +6,20 @@
 |
 [Wiki](https://github.com/AloneMonkey/MonkeyDev/wiki)
 
+<p align="center">
+  <p align="center"></p>
+  <p align="center"></p>
+  <p align="center"></p>
+
+  <p align="center">
+    <img src="http://7xtdl4.com1.z0.glb.clouddn.com/WechatIMG7.jpeg" alt="qrcode">
+  </p>
+
+  <p align="center">
+     MonkeyDev 微信交流群
+  </p>
+</p>
+
 A modified version of iOSOpenDev
 
 * easy to install
