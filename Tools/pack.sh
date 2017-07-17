@@ -47,6 +47,18 @@ fi
 cp -rf "$BUILT_PRODUCTS_DIR/lib""$TARGET_NAME""Dylib.dylib" "$TARGET_APP_FRAMEWORKS_PATH"
 cp -rf "$FRAMEWORKS_TO_INJECT_PATH" "$TARGET_APP_FRAMEWORKS_PATH"
 
+if [[ -d "$SRCROOT/$TARGET_NAME/Resources" ]]; then
+ for file in "$SRCROOT/$TARGET_NAME/Resources"/*; do
+ 	extension="${file#*.}"
+  	filename="${file##*/}"
+  	if [[ "$extension" == "storyboard" ]]; then
+  		ibtool --compile "$BUILD_APP_PATH/$filename"c "$file"
+  	else
+  		cp -rf "$file" "$BUILD_APP_PATH/"
+  	fi
+ done
+fi
+
 # Inject the Dynamic Lib
 APP_BINARY=`plutil -convert xml1 -o - $BUILD_APP_PATH/Info.plist|grep -A1 Exec|tail -n1|cut -f2 -d\>|cut -f1 -d\<`
 
