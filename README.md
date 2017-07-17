@@ -3,6 +3,8 @@
 [English Doc](README.md)
 |
 [中文文档](README-zh.md)
+|
+[Wiki](https://github.com/AloneMonkey/MonkeyDev/wiki)
 
 A modified version of iOSOpenDev
 
