@@ -12,7 +12,7 @@
   <p align="center"></p>
 
   <p align="center">
-    <img src="http://7xtdl4.com1.z0.glb.clouddn.com/WechatIMG7.jpeg" alt="qrcode">
+    <img with="220px" height="220px" src="http://7xtdl4.com1.z0.glb.clouddn.com/WechatIMG7.jpeg" alt="qrcode">
   </p>
 
   <p align="center">
