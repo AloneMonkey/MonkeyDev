@@ -559,7 +559,7 @@ function runFuncOnDevice() # args: function, hostAddress, hostPort
 	local hostAddress="$2"
 	local hostPort="$3"
 	local cmd
-		
+
 	if [[ $hostAddress == "" ]]; then
 	
 		requireExportedVariable "MonkeyDevDeviceIP"
@@ -586,11 +586,15 @@ function runFuncOnDevice() # args: function, hostAddress, hostPort
 	respring)
 		cmd="killall SpringBoard"
 	;;
+	uicache)
+		cmd="su mobile -c uicache"
+	;;
 	*)
-		panic $? "Invalid function: $func"
+		# panic $? "Invalid function: $func"
+		cmd="$func"
 	;;
 	esac
-	  
+
 	ssh -p$hostPort root@$hostAddress $cmd || \
 		panic $? "Failed to perform function $func on device $hostAddress"
 }
@@ -881,10 +885,19 @@ function xcodeBuildPhase() # no args
 						# install package on device #					
 						managePackageOnDevice "install" "$allPackagesDir/$packageFileName" "$MonkeyDevDeviceIP" "$MonkeyDevDevicePort"
 						
-						# respring? #
-						if [[ "$MonkeyDevRespringOnInstall" == "YES" ]]; then
-							echo "Respringing device..."
-							runFuncOnDevice "respring" "$MonkeyDevDeviceIP" "$MonkeyDevDevicePort" 
+						if [[ "$MonkeyDevkillProcessOnInstall" != "" ]]; then
+							if [[ "$MonkeyDevkillProcessOnInstall" == "SpringBoard" ]]; then
+								echo "respring device..."
+								runFuncOnDevice "respring" "$MonkeyDevDeviceIP" "$MonkeyDevDevicePort" 
+							else
+								echo "killall -9 $MonkeyDevkillProcessOnInstall"
+								runFuncOnDevice "killall -9 $MonkeyDevkillProcessOnInstall" "$MonkeyDevDeviceIP" "$MonkeyDevDevicePort"
+							fi
+						fi
+
+						if [[ "$MonkeyDevClearUiCacheOnInstall" == "YES" ]]; then
+ 							echo "Clearing uicache device..."
+ 							runFuncOnDevice "uicache" "$MonkeyDevDeviceIP" "$MonkeyDevDevicePort"
 						fi
 					else
 						# build setting MonkeyDevDeviceIP is empty #
