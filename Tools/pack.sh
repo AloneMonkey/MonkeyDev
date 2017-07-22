@@ -6,6 +6,7 @@ DEMOTARGET_APP_PATH="/opt/MonkeyDev/Resource/TargetApp.app"
 OPTOOL="$MONKEYDEV_TOOLS/optool"
 FRAMEWORKS_TO_INJECT_PATH="/opt/MonkeyDev/Frameworks/"
 CUSTOM_DISPLAY_NAME=$(/usr/libexec/PlistBuddy -c "Print CFBundleDisplayName"  "${SRCROOT}/$TARGET_NAME/Info.plist")
+CUSTOM_URL_TYPE=$(/usr/libexec/PlistBuddy -x -c "Print CFBundleURLTypes"  "${SRCROOT}/$TARGET_NAME/Info.plist")
 CUSTOM_BUNDLE_ID="$PRODUCT_BUNDLE_IDENTIFIER"
 
 rm -rf "$TEMP_PATH" || true
@@ -75,6 +76,17 @@ if [[ "$CUSTOM_DISPLAY_NAME" != "" ]]; then
 	/usr/libexec/PlistBuddy -c "Set :CFBundleDisplayName $CUSTOM_DISPLAY_NAME" "$BUILD_APP_PATH/Info.plist"
 fi
 /usr/libexec/PlistBuddy -c "Set :CFBundleIdentifier $PRODUCT_BUNDLE_IDENTIFIER" "$BUILD_APP_PATH/Info.plist"
+
+#support URL Scheme
+if [[ "$CUSTOM_URL_TYPE" != "" ]]; then
+	CUSTOM_URL_TYPE_FILE="$TEMP_PATH"/url_type.plist
+	echo "$CUSTOM_URL_TYPE" >> "$CUSTOM_URL_TYPE_FILE"
+	ORIGIN_URL_TYPE=$(/usr/libexec/PlistBuddy -c "Print CFBundleURLTypes"  "$BUILD_APP_PATH/Info.plist")
+	if [[ "$ORIGIN_URL_TYPE" == "" ]]; then
+		/usr/libexec/PlistBuddy -x -c 'add CFBundleURLTypes dict' "$BUILD_APP_PATH/Info.plist"
+	fi
+	/usr/libexec/PlistBuddy -x -c "merge $CUSTOM_URL_TYPE_FILE CFBundleURLTypes" "$BUILD_APP_PATH/Info.plist"
+fi
 
 #codesign
 if [ -d "$TARGET_APP_FRAMEWORKS_PATH" ]; then
