@@ -80,12 +80,13 @@ fi
 #support URL Scheme
 if [[ "$CUSTOM_URL_TYPE" != "" ]]; then
 	CUSTOM_URL_TYPE_FILE="$TEMP_PATH"/url_type.plist
+	CUSTOM_URL_TYPE_FILE_EX=$(echo "$CUSTOM_URL_TYPE_FILE" | sed "s/ /\\\ /g")
 	echo "$CUSTOM_URL_TYPE" >> "$CUSTOM_URL_TYPE_FILE"
 	ORIGIN_URL_TYPE=$(/usr/libexec/PlistBuddy -c "Print CFBundleURLTypes"  "$BUILD_APP_PATH/Info.plist")
 	if [[ "$ORIGIN_URL_TYPE" == "" ]]; then
-		/usr/libexec/PlistBuddy -x -c 'add CFBundleURLTypes dict' "$BUILD_APP_PATH/Info.plist"
+		/usr/libexec/PlistBuddy -x -c 'add CFBundleURLTypes array' "$BUILD_APP_PATH/Info.plist"
 	fi
-	/usr/libexec/PlistBuddy -x -c "merge $CUSTOM_URL_TYPE_FILE CFBundleURLTypes" "$BUILD_APP_PATH/Info.plist"
+	/usr/libexec/PlistBuddy -x -c "merge $CUSTOM_URL_TYPE_FILE_EX CFBundleURLTypes" "$BUILD_APP_PATH/Info.plist"
 fi
 
 #codesign
