@@ -99,10 +99,10 @@ done
 fi
 
 #cocoapods
-if [[ -f "${SRCROOT}/Pods/Target Support Files/Pods-MonkeyPodDylib/Pods-MonkeyPodDylib-frameworks.sh" ]]; then
-	source "${SRCROOT}/Pods/Target Support Files/Pods-MonkeyPodDylib/Pods-MonkeyPodDylib-frameworks.sh"
-fi
+# if [[ -f "${SRCROOT}/Pods/Target Support Files/Pods-MonkeyPodDylib/Pods-MonkeyPodDylib-frameworks.sh" ]]; then
+# 	source "${SRCROOT}/Pods/Target Support Files/Pods-MonkeyPodDylib/Pods-MonkeyPodDylib-frameworks.sh"
+# fi
 
-if [[ -f "${SRCROOT}/Pods/Target Support Files/Pods-MonkeyPodDylib/Pods-MonkeyPodDylib-resources.sh" ]]; then
-	source "${SRCROOT}/Pods/Target Support Files/Pods-MonkeyPodDylib/Pods-MonkeyPodDylib-resources.sh"
-fi
+# if [[ -f "${SRCROOT}/Pods/Target Support Files/Pods-MonkeyPodDylib/Pods-MonkeyPodDylib-resources.sh" ]]; then
+# 	source "${SRCROOT}/Pods/Target Support Files/Pods-MonkeyPodDylib/Pods-MonkeyPodDylib-resources.sh"
+# fi
