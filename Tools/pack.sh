@@ -1,3 +1,17 @@
+function codesign()
+{
+    for file in `ls $1`;
+    do
+		extension="${file#*.}"
+        if [[ -d "$1/$file" ]]; then
+        	if [[  "$extension" == "framework" ]]; then
+        		/usr/bin/codesign --force --sign "$EXPANDED_CODE_SIGN_IDENTITY" "$1/$file"
+        	fi
+            codesign "$1/$file"
+        fi
+    done
+}
+
 echo "packing..."
 # environment
 TEMP_PATH="${SRCROOT}/$TARGET_NAME/tmp"
@@ -90,13 +104,14 @@ if [[ "$CUSTOM_URL_TYPE" != "" ]]; then
 fi
 
 #codesign
-if [ -d "$TARGET_APP_FRAMEWORKS_PATH" ]; then
-for FRAMEWORK in "$TARGET_APP_FRAMEWORKS_PATH/"*
-do
-    FILENAME=$(basename $FRAMEWORK)
-    /usr/bin/codesign --force --sign "$EXPANDED_CODE_SIGN_IDENTITY" "$FRAMEWORK"
-done
-fi
+# if [ -d "$TARGET_APP_FRAMEWORKS_PATH" ]; then
+# for FRAMEWORK in "$TARGET_APP_FRAMEWORKS_PATH/"*
+# do
+#     /usr/bin/codesign --force --sign "$EXPANDED_CODE_SIGN_IDENTITY" "$FRAMEWORK"
+# done
+# fi
+
+codesign "$BUILD_APP_PATH"
 
 #cocoapods
 if [[ -f "${SRCROOT}/Pods/Target Support Files/Pods-""$TARGET_NAME""Dylib/Pods-""$TARGET_NAME""Dylib-frameworks.sh" ]]; then
@@ -105,4 +120,4 @@ fi
 
 if [[ -f "${SRCROOT}/Pods/Target Support Files/Pods-""$TARGET_NAME""Dylib/Pods-""$TARGET_NAME""Dylib-resources.sh" ]]; then
 	source "${SRCROOT}/Pods/Target Support Files/Pods-""$TARGET_NAME""Dylib/Pods-""$TARGET_NAME""Dylib-resources.sh"
-fi
+fi 
