@@ -14,11 +14,12 @@ function codesign()
 
 echo "packing..."
 # environment
+MONKEYDEV_PATH="/opt/MonkeyDev"
 TEMP_PATH="${SRCROOT}/$TARGET_NAME/tmp"
-MONKEYDEV_TOOLS="/opt/MonkeyDev/Tools/"
-DEMOTARGET_APP_PATH="/opt/MonkeyDev/Resource/TargetApp.app"
-OPTOOL="$MONKEYDEV_TOOLS/optool"
-FRAMEWORKS_TO_INJECT_PATH="/opt/MonkeyDev/Frameworks/"
+MONKEYDEV_TOOLS="$MONKEYDEV_PATH/Tools/"
+DEMOTARGET_APP_PATH="$MONKEYDEV_PATH/Resource/TargetApp.app"
+OPTOOL="$MONKEYDEV_PATH/bin/optool"
+FRAMEWORKS_TO_INJECT_PATH="$MONKEYDEV_PATH/Frameworks/"
 CUSTOM_DISPLAY_NAME=$(/usr/libexec/PlistBuddy -c "Print CFBundleDisplayName"  "${SRCROOT}/$TARGET_NAME/Info.plist")
 CUSTOM_URL_TYPE=$(/usr/libexec/PlistBuddy -x -c "Print CFBundleURLTypes"  "${SRCROOT}/$TARGET_NAME/Info.plist")
 CUSTOM_BUNDLE_ID="$PRODUCT_BUNDLE_IDENTIFIER"
