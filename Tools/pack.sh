@@ -79,6 +79,7 @@ fi
 APP_BINARY=`plutil -convert xml1 -o - $BUILD_APP_PATH/Info.plist|grep -A1 Exec|tail -n1|cut -f2 -d\>|cut -f1 -d\<`
 
 "$OPTOOL" install -c load -p "@executable_path/Frameworks/lib""$TARGET_NAME""Dylib.dylib" -t "$BUILD_APP_PATH/$APP_BINARY"
+"$OPTOOL" unrestrict -w -t "$BUILD_APP_PATH/$APP_BINARY"
 
 chmod +x "$BUILD_APP_PATH/$APP_BINARY"
 
