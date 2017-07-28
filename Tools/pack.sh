@@ -4,10 +4,15 @@ function codesign()
     do
 		extension="${file#*.}"
         if [[ -d "$1/$file" ]]; then
-        	if [[  "$extension" == "framework" ]]; then
+        	if [[ "$extension" == "framework" ]]; then
+        		/usr/bin/codesign --force --sign "$EXPANDED_CODE_SIGN_IDENTITY" "$1/$file"
+			else
+				codesign "$1/$file"
+        	fi
+		elif [[ -f "$1/$file" ]]; then
+			if [[ "$extension" == "dylib" ]]; then
         		/usr/bin/codesign --force --sign "$EXPANDED_CODE_SIGN_IDENTITY" "$1/$file"
         	fi
-            codesign "$1/$file"
         fi
     done
 }
