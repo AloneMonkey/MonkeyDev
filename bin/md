@@ -837,7 +837,7 @@ function xcodeBuildPhase() # no args
 	elif [[ "$PLATFORM_NAME" != "iphoneos" ]]; then
 		echo "Skipping signing (since platform is not iphoneos)"
 	else
-		signCode "$builtExecutable" "$CODE_SIGN_IDENTITY"
+		signCode "$builtExecutable" "$EXPANDED_CODE_SIGN_IDENTITY"
 	fi
 
 	changeMode "$INSTALL_MODE_FLAG" "$builtExecutable"
