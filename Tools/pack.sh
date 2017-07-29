@@ -63,7 +63,7 @@ function checkApp(){
  		fi
  		mkdir -p "$TARGET_DUMP_DIR"
 
- 		if [[ "$FAT_FILE" && "$ARMV7" && "$ARM64" && "$decrypted_num" == "1" ]]; then
+ 		if "$FAT_FILE" && "$ARMV7" && "$ARM64" && [[ "$decrypted_num" == "1" ]]; then
  			decrypted_arch="arm64"
  			lipo -thin armv7 $MACH_O_FILE_PATH -o $TEMP_PATH/"$MACH_O_FILE_NAME"_armv7
 			lipo -thin arm64 $MACH_O_FILE_PATH -o $TEMP_PATH/"$MACH_O_FILE_NAME"_arm64
@@ -80,6 +80,7 @@ function checkApp(){
  	if [[ ! -f "$TARGET_APP_PATH"/md_restore_symbol ]] && [[ "${MONKEYDEV_RESTORE_SYMBOL}" == "YES" ]]; then
  		if "$FAT_FILE"; then
  			if "$ARMV7" && "$ARM64"; then
+ 				echo "fat: armv7 and arm64"
  				lipo -thin armv7 $MACH_O_FILE_PATH -o $TEMP_PATH/"$MACH_O_FILE_NAME"_armv7
 				lipo -thin arm64 $MACH_O_FILE_PATH -o $TEMP_PATH/"$MACH_O_FILE_NAME"_arm64
 				"$RESTORE_SYMBOL_TOOL" $TEMP_PATH/$"$MACH_O_FILE_NAME"_armv7 -o $TEMP_PATH/$"$MACH_O_FILE_NAME"_armv7_with_symbol
@@ -87,18 +88,22 @@ function checkApp(){
 				lipo -create $TEMP_PATH/"$MACH_O_FILE_NAME"_armv7_with_symbol $TEMP_PATH/"$MACH_O_FILE_NAME"_arm64_with_symbol -o $TEMP_PATH/"$MACH_O_FILE_NAME"_with_symbol
 				cp -rf $TEMP_PATH/"$MACH_O_FILE_NAME"_with_symbol $MACH_O_FILE_PATH
 			elif "$ARMV7"; then
+				echo "fat: armv7"
 				lipo -thin armv7 $MACH_O_FILE_PATH -o $TEMP_PATH/"$MACH_O_FILE_NAME"_armv7
 				"$RESTORE_SYMBOL_TOOL" $TEMP_PATH/"$MACH_O_FILE_NAME"_armv7 -o $TEMP_PATH/"$MACH_O_FILE_NAME"_armv7_with_symbol
 	 			cp -rf $TEMP_PATH/"$MACH_O_FILE_NAME"_armv7_with_symbol $MACH_O_FILE_PATH
  			elif "$ARM64"; then
+ 				echo "fat: arm64"
  				lipo -thin arm64 $MACH_O_FILE_PATH -o $TEMP_PATH/"$MACH_O_FILE_NAME"_arm64
  				"$RESTORE_SYMBOL_TOOL" $TEMP_PATH/"$MACH_O_FILE_NAME"_arm64 -o $TEMP_PATH/"$MACH_O_FILE_NAME"_arm64_with_symbol
 	 			cp -rf $TEMP_PATH/"$MACH_O_FILE_NAME"_arm64_with_symbol $MACH_O_FILE_PATH
  			fi
 	 	elif "$ARMV7"; then
+	 		echo "armv7"
 	 		"$RESTORE_SYMBOL_TOOL" "$MACH_O_FILE_PATH" -o $TEMP_PATH/"$MACH_O_FILE_NAME"_armv7_with_symbol
 	 		cp -rf $TEMP_PATH/"$MACH_O_FILE_NAME"_armv7_with_symbol $MACH_O_FILE_PATH
 	 	elif "$ARM64"; then
+	 		echo "arm64"
 	 		"$RESTORE_SYMBOL_TOOL" "$MACH_O_FILE_PATH" -o $TEMP_PATH/"$MACH_O_FILE_NAME"_arm64_with_symbol
 	 		cp -rf $TEMP_PATH/"$MACH_O_FILE_NAME"_arm64_with_symbol $MACH_O_FILE_PATH
 	 	fi
