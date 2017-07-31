@@ -1,6 +1,7 @@
 MONKEYDEV_PATH="/opt/MonkeyDev"
 TEMP_PATH="${SRCROOT}/$TARGET_NAME/tmp"
 RESTORE_SYMBOL_TOOL="$MONKEYDEV_PATH/bin/restore-symbol"
+CREATE_IPA="$MONKEYDEV_PATH/bin/createIPA.command"
 CLASS_DUMP_TOOL="$MONKEYDEV_PATH/bin/class-dump"
 
 function panic() # args: exitCode, message...
@@ -123,6 +124,10 @@ CUSTOM_BUNDLE_ID="$PRODUCT_BUNDLE_IDENTIFIER"
 
 rm -rf "$TEMP_PATH" || true
 mkdir -p "$TEMP_PATH" || true
+
+rm -rf "${PROJECT_DIR}"/LatestBuild || true
+ln -fhs "${BUILT_PRODUCTS_DIR}" "${PROJECT_DIR}"/LatestBuild
+cp -rf "$CREATE_IPA" "${PROJECT_DIR}"/LatestBuild/
 
 #deal ipa or app
 TARGET_APP_PATH=$(find "$SRCROOT/$TARGET_NAME/TargetApp" -type d | grep ".app$" | head -n 1)
