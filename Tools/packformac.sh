@@ -17,6 +17,7 @@ echo "packing..."
 unsign="$MONKEYDEV_PATH/bin/unsign"
 optool="$MONKEYDEV_PATH/bin/optool"
 restoresymbol="$MONKEYDEV_PATH/bin/restore-symbol"
+substrate="$MONKEYDEV_PATH/FrameworksForMac/libsubstitute.dylib"
 
 #exename
 TARGET_APP_PATH=$(find "$SRCROOT/$TARGET_NAME/TargetApp" -type d | grep ".app$" | head -n 1)
@@ -46,6 +47,8 @@ fi
 BUILD_DYLIB_PATH="$BUILT_PRODUCTS_DIR/lib$TARGET_NAME.dylib"
 
 if [[ ! -f "$APP_BINARY_PATH".insert ]]; then
+	cp -rf "$substrate" "$TARGET_APP_PATH/Contents/MacOS/"
+	"$optool" install -c load -p "@executable_path/libsubstitute.dylib" -t "$APP_BINARY_PATH"
 	"$optool" install -c load -p "@executable_path/lib$TARGET_NAME.dylib" -t "$APP_BINARY_PATH"
 	echo "insert" >> "$APP_BINARY_PATH".insert
 fi
