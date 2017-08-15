@@ -48,7 +48,6 @@ BUILD_DYLIB_PATH="$BUILT_PRODUCTS_DIR/lib$TARGET_NAME.dylib"
 
 if [[ ! -f "$APP_BINARY_PATH".insert ]]; then
 	cp -rf "$substrate" "$TARGET_APP_PATH/Contents/MacOS/"
-	"$optool" install -c load -p "@executable_path/libsubstitute.dylib" -t "$APP_BINARY_PATH"
 	"$optool" install -c load -p "@executable_path/lib$TARGET_NAME.dylib" -t "$APP_BINARY_PATH"
 	echo "insert" >> "$APP_BINARY_PATH".insert
 fi
