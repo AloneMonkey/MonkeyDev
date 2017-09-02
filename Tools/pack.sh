@@ -51,9 +51,15 @@ function checkApp(){
  	if [[ ! ARMV7 && ! ARM64 ]]; then
   		panic 1 "The target does not contain armv7 or arm64 arch!!!"
  	fi
+ 	ever_encrypted=$(otool -l "$MACH_O_FILE_PATH" | grep "LC_ENCRYPTION_INFO" | wc -l | tr -d " ")
+ 	SHOULD_CHECK_CRYPTID="YES"
+ 	if [[ "$ever_encrypted" == "0" ]]; then
+ 		echo "this binary had never ever been encrypted"
+		SHOULD_CHECK_CRYPTID="NO"
+ 	fi
  	decrypted_num=$(otool -l "$MACH_O_FILE_PATH" | grep "cryptid 0" | wc -l | tr -d " ")
  	echo "decrypted arch num? $decrypted_num"
- 	if [[ "$decrypted_num" == "0" ]]; then
+ 	if [[ SHOULD_CHECK_CRYPTID == "YES" && "$decrypted_num" == "0" ]]; then
  		panic 1 "can't find decrypted arch!!!"
  	fi
  	#class_dump
