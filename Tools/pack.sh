@@ -18,7 +18,7 @@ function panic() # args: exitCode, message...
 
 function codesign()
 {
-    for file in `ls $1`;
+    for file in `ls "$1"`;
     do
 		extension="${file#*.}"
         if [[ -d "$1/$file" ]]; then
