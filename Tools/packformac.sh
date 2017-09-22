@@ -26,7 +26,7 @@ if [[ "$TARGET_APP_PATH" == "" ]]; then
 	panic 1 "cannot find target app"
 fi
 
-APP_BINARY_NAME=`plutil -convert xml1 -o - $TARGET_APP_PATH/Contents/Info.plist | grep -A1 CFBundleExecutable | tail -n1 | cut -f2 -d\> | cut -f1 -d\<`
+APP_BINARY_NAME=`plutil -convert xml1 -o - "$TARGET_APP_PATH/Contents/Info.plist" | grep -A1 CFBundleExecutable | tail -n1 | cut -f2 -d\> | cut -f1 -d\<`
 APP_BINARY_PATH="$TARGET_APP_PATH/Contents/MacOS/$APP_BINARY_NAME"
 
 #restoresymbol
