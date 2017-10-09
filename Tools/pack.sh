@@ -178,7 +178,7 @@ function pack(){
 	fi
 
 	# Inject the Dynamic Lib
-	APP_BINARY=`plutil -convert xml1 -o - $BUILD_APP_PATH/Info.plist|grep -A1 Exec|tail -n1|cut -f2 -d\>|cut -f1 -d\<`
+	APP_BINARY=`plutil -convert xml1 -o - $BUILD_APP_PATH/Info.plist | grep -A1 Exec | tail -n1 | cut -f2 -d\> | cut -f1 -d\<`
 
 	"$OPTOOL" install -c load -p "@executable_path/Frameworks/lib""$TARGET_NAME""Dylib.dylib" -t "$BUILD_APP_PATH/$APP_BINARY"
 	"$OPTOOL" unrestrict -w -t "$BUILD_APP_PATH/$APP_BINARY"
@@ -229,9 +229,12 @@ function pack(){
 	if [[ -f "${SRCROOT}/../Pods/Target Support Files/Pods-""$TARGET_NAME""Dylib/Pods-""$TARGET_NAME""Dylib-frameworks.sh" ]]; then
 		source "${SRCROOT}/../Pods/Target Support Files/Pods-""$TARGET_NAME""Dylib/Pods-""$TARGET_NAME""Dylib-frameworks.sh"
 	fi
+
+	mv "$BUILD_APP_PATH/Info.plist" "$BUILD_APP_PATH/Info.plist.bak" 
 }
 
 if [[ "$1" == "codesign" ]]; then
+	mv "$BUILD_APP_PATH/Info.plist.bak" "$BUILD_APP_PATH/Info.plist" 
 	codesign "$BUILD_APP_PATH"
 else
 	pack
