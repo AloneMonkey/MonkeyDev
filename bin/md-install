@@ -120,7 +120,7 @@ function downloadFile() # args: sourceUrl, targetPath
 	curlPath=`which curl` || \
 		panic $? "Failed to get curl path"
 
-	"$curlPath" --silent --insecure --output "$targetPath" "$sourceUrl" || \
+	"$curlPath" --output "$targetPath" "$sourceUrl" || \
 		panic $? "Failed to download $sourceUrl to $targetPath"
 }
 
