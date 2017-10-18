@@ -192,16 +192,19 @@ function pack(){
 	# Update Info.plist for Target App
 	if [[ "$CUSTOM_DISPLAY_NAME" != "" ]]; then
 		/usr/libexec/PlistBuddy -c "Set :CFBundleDisplayName $CUSTOM_DISPLAY_NAME" "$BUILD_APP_PATH/Info.plist"
-		if [[ -f "$BUILD_APP_PATH/zh_CN.lproj/InfoPlist.strings" ]];then
-			/usr/libexec/PlistBuddy -c "Set :CFBundleDisplayName $CUSTOM_DISPLAY_NAME" "$BUILD_APP_PATH/zh_CN.lproj/InfoPlist.strings"
-		fi
-		if [[ -f "$BUILD_APP_PATH/en.lproj/InfoPlist.strings" ]];then
-			/usr/libexec/PlistBuddy -c "Set :CFBundleDisplayName $CUSTOM_DISPLAY_NAME" "$BUILD_APP_PATH/en.lproj/InfoPlist.strings"
-		fi
-		if [[ -f "$BUILD_APP_PATH/zh_TW.lproj/InfoPlist.strings" ]];then
-			/usr/libexec/PlistBuddy -c "Set :CFBundleDisplayName $CUSTOM_DISPLAY_NAME" "$BUILD_APP_PATH/zh_TW.lproj/InfoPlist.strings"
-		fi
+		for file in `ls "$BUILD_APP_PATH"`;
+		do
+			extension="${file#*.}"
+		    if [[ -d "$BUILD_APP_PATH/$file" ]]; then
+				if [[ "$extension" == "lproj" ]]; then
+					if [[ -f "$BUILD_APP_PATH/$file/InfoPlist.strings" ]];then
+						/usr/libexec/PlistBuddy -c "Set :CFBundleDisplayName $CUSTOM_DISPLAY_NAME" "$BUILD_APP_PATH/$file/InfoPlist.strings"
+					fi
+		    	fi
+			fi
+		done
 	fi
+	
 	/usr/libexec/PlistBuddy -c "Set :CFBundleIdentifier $PRODUCT_BUNDLE_IDENTIFIER" "$BUILD_APP_PATH/Info.plist"
 
 	#support URL Scheme
