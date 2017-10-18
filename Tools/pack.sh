@@ -198,6 +198,9 @@ function pack(){
 		if [[ -f "$BUILD_APP_PATH/en.lproj/InfoPlist.strings" ]];then
 			/usr/libexec/PlistBuddy -c "Set :CFBundleDisplayName $CUSTOM_DISPLAY_NAME" "$BUILD_APP_PATH/en.lproj/InfoPlist.strings"
 		fi
+		if [[ -f "$BUILD_APP_PATH/zh_TW.lproj/InfoPlist.strings" ]];then
+			/usr/libexec/PlistBuddy -c "Set :CFBundleDisplayName $CUSTOM_DISPLAY_NAME" "$BUILD_APP_PATH/zh_TW.lproj/InfoPlist.strings"
+		fi
 	fi
 	/usr/libexec/PlistBuddy -c "Set :CFBundleIdentifier $PRODUCT_BUNDLE_IDENTIFIER" "$BUILD_APP_PATH/Info.plist"
 
