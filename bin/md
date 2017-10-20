@@ -729,7 +729,7 @@ function xcodeBuildPhase_Logos() # no args
 	fi
 	
 	# for each *.xm project file, use Logos Processor to generate *.mm file
-	projectXmFiles=($(perl -ne 'if ($_ =~ /\/\* (.+\.xm) \*\/ *= *{.*?isa *= *PBXFileReference\b/) { print "$1\n"; }' "$pbxProjectFilePath"))
+	projectXmFiles=($(perl -ne 'if ($_ =~ /\/\* .+\.xm \*\/ *= *{.*?isa *= *PBXFileReference\b[^\}]*?\bpath *= *(.+\.xm)/) { print "$1\n"; }' "$pbxProjectFilePath"))
 	projectXFiles=($(perl -ne 'if ($_ =~ /\/\* (.+\.x) \*\/ *= *{.*?isa *= *PBXFileReference\b/) { print "$1\n"; }' "$pbxProjectFilePath"))
 	
 	for f in "${projectXmFiles[@]}"; do
