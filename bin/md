@@ -634,6 +634,36 @@ function doesFileContain() # args: filePath, pattern
 	echo $funcReturn
 }
 
+#预处理xm、x文件
+function Processor()
+{
+	local logosProcessor="$1"
+	local currentDirectory="$2"
+
+	if [[ $currentDirectory =~ "Build/Products" ]] || [[ $currentDirectory =~ "Build/Intermediates" ]] || [[ $currentDirectory =~ "Index/DataStore" ]] || [[ $currentDirectory =~ "/LatestBuild/" ]]; then
+		return
+	fi
+	
+	for file in `ls "$currentDirectory"`;
+    do
+		extension="${file#*.}"
+	  	filename="${file##*/}"
+	  	if [[ -d "$currentDirectory/$file" ]]; then
+	  		Processor "$logosProcessor" "$currentDirectory/$file"
+	  	elif [[ "$extension" == "xm" ]]; then
+	  		echo "Logos Processor: $filename -> ${filename%.*}.mm..."
+	  		logosStdErr=$(("$logosProcessor" "$currentDirectory/$file" > "$currentDirectory/${file%.*}.mm") 2>&1) || \
+				panic $? "Failed Logos Processor: $logosStdErr"
+
+	  	elif [[ "$extension" == "x" ]]; then
+	  		echo "Logos Processor: $filename -> ${filename%.*}.mm..."
+	  		logosStdErr=$(("$logosProcessor" "$currentDirectory/$file" > "$currentDirectory/${file%.*}.m") 2>&1) || \
+				panic $? "Failed Logos Processor: $logosStdErr"
+			
+	  	fi
+    done
+}
+
 # 	--xcbp-logos
 function xcodeBuildPhase_Logos() # no args
 {
@@ -727,35 +757,10 @@ function xcodeBuildPhase_Logos() # no args
 		echo "To dismiss this build error, just perform the build again."
 		panic 1
 	fi
-	
+
 	# for each *.xm project file, use Logos Processor to generate *.mm file
-	projectXmFiles=($(perl -ne 'if ($_ =~ /\/\* .+\.xm \*\/ *= *{.*?isa *= *PBXFileReference\b[^\}]*?\bpath *= *(.+\.xm)/) { print "$1\n"; }' "$pbxProjectFilePath"))
-	projectXFiles=($(perl -ne 'if ($_ =~ /\/\* (.+\.x) \*\/ *= *{.*?isa *= *PBXFileReference\b/) { print "$1\n"; }' "$pbxProjectFilePath"))
-	
-	for f in "${projectXmFiles[@]}"; do
-		echo "Logos Processor: $f -> ${f%.*}.mm..."
 
-		logosStdErr=$(("$logosProcessor" "$PROJECT_DIR/$TARGET_NAME/$f" > "$PROJECT_DIR/$TARGET_NAME/${f%.*}.mm") 2>&1) || \
-			logosErr=$?
-		
-		if [[ $logosErr != 0 ]]; then
-			echo "Failed Logos Processor" >&2
-			echo "Logos Processor outputted:" >&2
-			echo "$logosStdErr" >&2
-			exit $logosErr
-		fi
-		
-	done
-	
-	for f in "${projectXFiles[@]}"; do
-		echo "Logos Processor: $f -> ${f%.*}.m..."
-
-		logosStdErr=$(("$logosProcessor" "$PROJECT_DIR/$TARGET_NAME/$f" > "$PROJECT_DIR/$TARGET_NAME/${f%.*}.m") 2>&1) || \
-			panic $? "Failed Logos Processor"
-	
-		[[ $logosStdErr == "" ]] || \
-			panic 1 "Logos Processor outputted: $logosStdErr"
-	done
+	Processor "$logosProcessor" "$PROJECT_DIR"
 
 	echo "Note: If any *.xm or *.x file generated above by the Logos Processor (${projectXmFiles[@]}) is not being compiled below, then you must add it to the Xcode project to be compiled."
 
