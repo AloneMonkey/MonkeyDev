@@ -124,15 +124,14 @@ function downloadGithubTarball() # args: url, outputDir, title
 	untardDir=`find "$tempDirForFiles/"* -type d -depth 0` || \
 		panic $? "Failed to get untar'ed directory name of $tempDirForTar/$tarFile"
 
+	rm -rf "$outputDir" || \
+		panic $? "Failed to remove directory: $outputDir"
+
 	mkdir -p "$outputDir" || \
 		panic $? "Failed to make directory: $outputDir"
 
 	cp -fR "$untardDir/"* "$outputDir/"
 }
-
-# start it
-rm -rf "$MonkeyDevPath" || \
-	panic $? "Failed to remove directory: $MonkeyDevPath"
 
 #更新一些基础文件和模板文件
 downloadGithubTarball "https://codeload.github.com/AloneMonkey/MonkeyDev/tar.gz/master" "$MonkeyDevPath" "MonkeyDev base"
