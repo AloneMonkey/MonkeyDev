@@ -205,8 +205,10 @@ function pack(){
 		done
 	fi
 	
-	/usr/libexec/PlistBuddy -c "Set :CFBundleIdentifier $PRODUCT_BUNDLE_IDENTIFIER" "$BUILD_APP_PATH/Info.plist"
-
+	if [[ "$PRODUCT_BUNDLE_IDENTIFIER" != "aaa" ]]; then
+		/usr/libexec/PlistBuddy -c "Set :CFBundleIdentifier $PRODUCT_BUNDLE_IDENTIFIER" "$BUILD_APP_PATH/Info.plist"
+	fi
+	
 	#support URL Scheme
 	if [[ "$CUSTOM_URL_TYPE" != "" ]]; then
 		CUSTOM_URL_TYPE_FILE="$TEMP_PATH"/url_type.plist
