@@ -584,7 +584,7 @@ function runFuncOnDevice() # args: function, hostAddress, hostPort
 		cmd="reboot"
 	;;
 	respring)
-		cmd="killall SpringBoard"
+		cmd="killall -9 SpringBoard"
 	;;
 	uicache)
 		cmd="su mobile -c uicache"
