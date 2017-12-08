@@ -56,6 +56,14 @@ function checkApp(){
  	if [[ "$decrypted_num" == "0" ]]; then
  		panic 1 "can't find decrypted arch!!!"
  	fi
+ 	if [[ "$decrypted_num" == "1" ]] && "$FAT_FILE"; then
+ 		if "$ARMV7"; then
+ 			lipo -thin armv7 $MACH_O_FILE_PATH -o $MACH_O_FILE_PATH
+ 		fi
+ 		if "$ARM64"; then
+ 			lipo -thin arm64 $MACH_O_FILE_PATH -o $MACH_O_FILE_PATH
+ 		fi
+ 	fi
  	#class_dump
  	if [[ ! -f "$TARGET_APP_PATH"/md_class_dump ]] && [[ "${MONKEYDEV_CLASS_DUMP}" == "YES" ]]; then
  		TARGET_DUMP_DIR="${SRCROOT}/$TARGET_NAME/$MACH_O_FILE_NAME"_Headers
