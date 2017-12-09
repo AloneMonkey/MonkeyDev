@@ -3,6 +3,7 @@ TEMP_PATH="${SRCROOT}/$TARGET_NAME/tmp"
 RESTORE_SYMBOL_TOOL="$MONKEYDEV_PATH/bin/restore-symbol"
 CREATE_IPA="$MONKEYDEV_PATH/bin/createIPA.command"
 CLASS_DUMP_TOOL="$MONKEYDEV_PATH/bin/class-dump"
+USE_MONKEY_PARSER="YES"
 
 function panic() # args: exitCode, message...
 {
@@ -129,6 +130,7 @@ function pack(){
 	MONKEYDEV_TOOLS="$MONKEYDEV_PATH/Tools/"
 	DEMOTARGET_APP_PATH="$MONKEYDEV_PATH/Resource/TargetApp.app"
 	OPTOOL="$MONKEYDEV_PATH/bin/optool"
+	MONKEYPARSER="$MONKEYDEV_PATH/bin/monkeyparser"
 	FRAMEWORKS_TO_INJECT_PATH="$MONKEYDEV_PATH/Frameworks/"
 	CUSTOM_DISPLAY_NAME=$(/usr/libexec/PlistBuddy -c "Print CFBundleDisplayName"  "${SRCROOT}/$TARGET_NAME/Info.plist")
 	CUSTOM_URL_TYPE=$(/usr/libexec/PlistBuddy -x -c "Print CFBundleURLTypes"  "${SRCROOT}/$TARGET_NAME/Info.plist")
@@ -188,8 +190,14 @@ function pack(){
 	# Inject the Dynamic Lib
 	APP_BINARY=`plutil -convert xml1 -o - $BUILD_APP_PATH/Info.plist | grep -A1 Exec | tail -n1 | cut -f2 -d\> | cut -f1 -d\<`
 
-	"$OPTOOL" install -c load -p "@executable_path/Frameworks/lib""$TARGET_NAME""Dylib.dylib" -t "$BUILD_APP_PATH/$APP_BINARY"
-	"$OPTOOL" unrestrict -w -t "$BUILD_APP_PATH/$APP_BINARY"
+	if [[ "$USE_MONKEY_PARSER" == "YES" ]]; then
+		"$MONKEYPARSER" install -c load -p "@executable_path/Frameworks/lib""$TARGET_NAME""Dylib.dylib" -t "$BUILD_APP_PATH/$APP_BINARY"
+		"$MONKEYPARSER" unrestrict -t "$BUILD_APP_PATH/$APP_BINARY"
+	else
+		"$OPTOOL" install -c load -p "@executable_path/Frameworks/lib""$TARGET_NAME""Dylib.dylib" -t "$BUILD_APP_PATH/$APP_BINARY"
+		"$OPTOOL" unrestrict -w -t "$BUILD_APP_PATH/$APP_BINARY"
+	fi
+	
 
 	chmod +x "$BUILD_APP_PATH/$APP_BINARY"
 
