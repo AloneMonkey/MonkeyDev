@@ -1,9 +1,8 @@
 MONKEYDEV_PATH="/opt/MonkeyDev"
 TEMP_PATH="${SRCROOT}/$TARGET_NAME/tmp"
-RESTORE_SYMBOL_TOOL="$MONKEYDEV_PATH/bin/restore-symbol"
+MONKEYPARSER="$MONKEYDEV_PATH/bin/monkeyparser"
 CREATE_IPA="$MONKEYDEV_PATH/bin/createIPA.command"
 CLASS_DUMP_TOOL="$MONKEYDEV_PATH/bin/class-dump"
-USE_MONKEY_PARSER="YES"
 
 function panic() # args: exitCode, message...
 {
@@ -94,28 +93,28 @@ function checkApp(){
  				echo "fat: armv7 and arm64"
  				lipo -thin armv7 "$MACH_O_FILE_PATH" -o "$TEMP_PATH/$MACH_O_FILE_NAME"_armv7
 				lipo -thin arm64 "$MACH_O_FILE_PATH" -o "$TEMP_PATH/$MACH_O_FILE_NAME"_arm64
-				"$RESTORE_SYMBOL_TOOL" "$TEMP_PATH/$MACH_O_FILE_NAME"_armv7 -o "$TEMP_PATH/$MACH_O_FILE_NAME"_armv7_with_symbol
-				"$RESTORE_SYMBOL_TOOL" "$TEMP_PATH/$MACH_O_FILE_NAME"_arm64 -o "$TEMP_PATH/$MACH_O_FILE_NAME"_arm64_with_symbol
+				"$MONKEYPARSER" restoresymbol -t "$TEMP_PATH/$MACH_O_FILE_NAME"_armv7 -o "$TEMP_PATH/$MACH_O_FILE_NAME"_armv7_with_symbol
+				"$MONKEYPARSER" restoresymbol -t "$TEMP_PATH/$MACH_O_FILE_NAME"_arm64 -o "$TEMP_PATH/$MACH_O_FILE_NAME"_arm64_with_symbol
 				lipo -create "$TEMP_PATH/$MACH_O_FILE_NAME"_armv7_with_symbol "$TEMP_PATH/$MACH_O_FILE_NAME"_arm64_with_symbol -o "$TEMP_PATH/$MACH_O_FILE_NAME"_with_symbol
 				cp -rf "$TEMP_PATH/$MACH_O_FILE_NAME"_with_symbol "$MACH_O_FILE_PATH"
 			elif "$ARMV7"; then
 				echo "fat: armv7"
 				lipo -thin armv7 "$MACH_O_FILE_PATH" -o "$TEMP_PATH/$MACH_O_FILE_NAME"_armv7
-				"$RESTORE_SYMBOL_TOOL" "$TEMP_PATH/$MACH_O_FILE_NAME"_armv7 -o "$TEMP_PATH/$MACH_O_FILE_NAME"_armv7_with_symbol
+				"$MONKEYPARSER" restoresymbol -t "$TEMP_PATH/$MACH_O_FILE_NAME"_armv7 -o "$TEMP_PATH/$MACH_O_FILE_NAME"_armv7_with_symbol
 	 			cp -rf "$TEMP_PATH/$MACH_O_FILE_NAME"_armv7_with_symbol "$MACH_O_FILE_PATH"
  			elif "$ARM64"; then
  				echo "fat: arm64"
  				lipo -thin arm64 "$MACH_O_FILE_PATH" -o "$TEMP_PATH/$MACH_O_FILE_NAME"_arm64
- 				"$RESTORE_SYMBOL_TOOL" "$TEMP_PATH/$MACH_O_FILE_NAME"_arm64 -o "$TEMP_PATH/$MACH_O_FILE_NAME"_arm64_with_symbol
+ 				"$MONKEYPARSER" restoresymbol -t "$TEMP_PATH/$MACH_O_FILE_NAME"_arm64 -o "$TEMP_PATH/$MACH_O_FILE_NAME"_arm64_with_symbol
 	 			cp -rf "$TEMP_PATH/$MACH_O_FILE_NAME"_arm64_with_symbol "$MACH_O_FILE_PATH"
  			fi
 	 	elif "$ARMV7"; then
 	 		echo "armv7"
-	 		"$RESTORE_SYMBOL_TOOL" "$MACH_O_FILE_PATH" -o "$TEMP_PATH/$MACH_O_FILE_NAME"_armv7_with_symbol
+	 		"$MONKEYPARSER" restoresymbol -t "$MACH_O_FILE_PATH" -o "$TEMP_PATH/$MACH_O_FILE_NAME"_armv7_with_symbol
 	 		cp -rf $TEMP_PATH/"$MACH_O_FILE_NAME"_armv7_with_symbol "$MACH_O_FILE_PATH"
 	 	elif "$ARM64"; then
 	 		echo "arm64"
-	 		"$RESTORE_SYMBOL_TOOL" "$MACH_O_FILE_PATH" -o "$TEMP_PATH/$MACH_O_FILE_NAME"_arm64_with_symbol
+	 		"$MONKEYPARSER" restoresymbol -t "$MACH_O_FILE_PATH" -o "$TEMP_PATH/$MACH_O_FILE_NAME"_arm64_with_symbol
 	 		cp -rf $TEMP_PATH/"$MACH_O_FILE_NAME"_arm64_with_symbol "$MACH_O_FILE_PATH"
 	 	fi
 	 	echo "finsih_restore_symbol" >> "$TARGET_APP_PATH"/md_restore_symbol
@@ -129,8 +128,6 @@ function pack(){
 	# environment
 	MONKEYDEV_TOOLS="$MONKEYDEV_PATH/Tools/"
 	DEMOTARGET_APP_PATH="$MONKEYDEV_PATH/Resource/TargetApp.app"
-	OPTOOL="$MONKEYDEV_PATH/bin/optool"
-	MONKEYPARSER="$MONKEYDEV_PATH/bin/monkeyparser"
 	FRAMEWORKS_TO_INJECT_PATH="$MONKEYDEV_PATH/Frameworks/"
 	CUSTOM_DISPLAY_NAME=$(/usr/libexec/PlistBuddy -c "Print CFBundleDisplayName"  "${SRCROOT}/$TARGET_NAME/Info.plist")
 	CUSTOM_URL_TYPE=$(/usr/libexec/PlistBuddy -x -c "Print CFBundleURLTypes"  "${SRCROOT}/$TARGET_NAME/Info.plist")
@@ -190,14 +187,8 @@ function pack(){
 	# Inject the Dynamic Lib
 	APP_BINARY=`plutil -convert xml1 -o - $BUILD_APP_PATH/Info.plist | grep -A1 Exec | tail -n1 | cut -f2 -d\> | cut -f1 -d\<`
 
-	if [[ "$USE_MONKEY_PARSER" == "YES" ]]; then
-		"$MONKEYPARSER" install -c load -p "@executable_path/Frameworks/lib""$TARGET_NAME""Dylib.dylib" -t "$BUILD_APP_PATH/$APP_BINARY"
-		"$MONKEYPARSER" unrestrict -t "$BUILD_APP_PATH/$APP_BINARY"
-	else
-		"$OPTOOL" install -c load -p "@executable_path/Frameworks/lib""$TARGET_NAME""Dylib.dylib" -t "$BUILD_APP_PATH/$APP_BINARY"
-		"$OPTOOL" unrestrict -w -t "$BUILD_APP_PATH/$APP_BINARY"
-	fi
-	
+	"$MONKEYPARSER" install -c load -p "@executable_path/Frameworks/lib""$TARGET_NAME""Dylib.dylib" -t "$BUILD_APP_PATH/$APP_BINARY"
+	"$MONKEYPARSER" unrestrict -t "$BUILD_APP_PATH/$APP_BINARY"
 
 	chmod +x "$BUILD_APP_PATH/$APP_BINARY"
 

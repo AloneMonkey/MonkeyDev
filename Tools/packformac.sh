@@ -14,9 +14,7 @@ function panic() # args: exitCode, message...
 
 echo "packing..."
 # environment
-unsign="$MONKEYDEV_PATH/bin/unsign"
-optool="$MONKEYDEV_PATH/bin/optool"
-restoresymbol="$MONKEYDEV_PATH/bin/restore-symbol"
+monkeyparser="$MONKEYDEV_PATH/bin/monkeyparser"
 substrate="$MONKEYDEV_PATH/FrameworksForMac/libsubstitute.dylib"
 
 #exename
@@ -31,14 +29,14 @@ APP_BINARY_PATH="$TARGET_APP_PATH/Contents/MacOS/$APP_BINARY_NAME"
 
 #restoresymbol
 if [[ ! -f "$APP_BINARY_PATH".symbol ]]; then
-	"$restoresymbol" "$APP_BINARY_PATH" -o "$APP_BINARY_PATH"_with_symbol
+	"$monkeyparser" restoresymbol -t "$APP_BINARY_PATH" -o "$APP_BINARY_PATH"_with_symbol
 	mv "$APP_BINARY_PATH"_with_symbol "$APP_BINARY_PATH"
 	echo "restoresymbol" >> "$APP_BINARY_PATH".symbol
 fi
 
 #unsign
 if [[ ! -f "$APP_BINARY_PATH".unsigned ]]; then
-	"$unsign" "$APP_BINARY_PATH"
+	"$monkeyparser" strip -t "$APP_BINARY_PATH" -o "$APP_BINARY_PATH".unsigned
 	mv "$APP_BINARY_PATH".unsigned "$APP_BINARY_PATH"
 	echo "unsigned" >> "$APP_BINARY_PATH".unsigned
 fi
@@ -48,7 +46,7 @@ BUILD_DYLIB_PATH="$BUILT_PRODUCTS_DIR/lib$TARGET_NAME.dylib"
 
 if [[ ! -f "$APP_BINARY_PATH".insert ]]; then
 	cp -rf "$substrate" "$TARGET_APP_PATH/Contents/MacOS/"
-	"$optool" install -c load -p "@executable_path/lib$TARGET_NAME.dylib" -t "$APP_BINARY_PATH"
+	"$monkeyparser" install -c load -p "@executable_path/lib$TARGET_NAME.dylib" -t "$APP_BINARY_PATH"
 	echo "insert" >> "$APP_BINARY_PATH".insert
 fi
 
