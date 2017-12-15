@@ -15,7 +15,7 @@ function panic() # args: exitCode, message...
 echo "packing..."
 # environment
 monkeyparser="$MONKEYDEV_PATH/bin/monkeyparser"
-substrate="$MONKEYDEV_PATH/FrameworksForMac/libsubstitute.dylib"
+substrate="$MONKEYDEV_PATH/MFrameworks/libsubstitute.dylib"
 
 #exename
 TARGET_APP_PATH=$(find "$SRCROOT/$TARGET_NAME/TargetApp" -type d | grep ".app$" | head -n 1)
