@@ -6,7 +6,7 @@ $setCmd
 export PATH=/opt/MonkeyDev/bin:$MonkeyDevTheosPath/bin:/usr/local/bin:/usr/bin:/usr/sbin:/bin:/sbin:$PATH
 
 export scriptName="${0##*/}"
-export scriptVer="3.3"
+export scriptVer="3.4"
 export originalArguments=("$@")
 export activeActionArg
 
@@ -210,6 +210,20 @@ function createSymlink() # args: sourcePath, linkPath
 	ln -fhs "$sourcePath" "$linkPath" || \
 		panic $? "Failed to create symbolic link $linkPath -> $sourcePath"
 }
+ 
+function runCmdOnDevice() # args: command message
+{
+	local command="$1"
+	local message="$1"
+	local final="$1"
+
+	if [[ "$MonkeyDevDevicePassword" != "" ]]; then
+		final="sshpass -p $MonkeyDevDevicePassword $command"
+	fi
+
+	eval "$final" || \
+		panic $? "$message"
+}
 
 #拷贝文件到设备
 function copyFileToDevice() # args: sourceFile, targetDir, hostAddress, hostPort
@@ -219,18 +233,15 @@ function copyFileToDevice() # args: sourceFile, targetDir, hostAddress, hostPort
 	local hostAddress="$3"
 	local hostPort="$4"
 	local targetFilePath
-	
-	ssh -p$hostPort root@$hostAddress mkdir -p "\"$targetDir\"" || \
-		panic $? "Failed to create directory $targetDir on device $hostAddress"
+
+	runCmdOnDevice "ssh -p$hostPort root@$hostAddress mkdir -p \"$targetDir\"" "Failed to create directory $targetDir on device $hostAddress"
 	
 	targetFilePath="$targetDir/`basename \"$sourceFile\"`" || \
 		panic $? "Failed to build target file path"
 		
-	ssh -p$hostPort root@$hostAddress rm -f "\"$targetFilePath\"" || \
-		panic $? "Failed to remove existing file $targetFilePath on device $hostAddress"
+	runCmdOnDevice "ssh -p$hostPort root@$hostAddress rm -f \"$targetFilePath\"" "Failed to remove existing file $targetFilePath on device $hostAddress"
 	
-	scp -P$hostPort "$sourceFile" root@$hostAddress:"\"$targetFilePath\"" || \
-		panic $? "Failed to copy file $sourceFile to device $hostAddress at directory $targetDir"
+	runCmdOnDevice "scp -P$hostPort $sourceFile root@$hostAddress:\"$targetFilePath\"" "Failed to copy file $sourceFile to device $hostAddress at directory $targetDir"
 }
 
 function getBashProfileEnvVarValue() # args: envVarName
@@ -545,8 +556,7 @@ function managePackageOnDevice() # args: manageAction, packageFileOrName, hostAd
 	# install, remove or purge package #
 	echo "$doingWhat package `basename \"$packageFileOrName\"` $direction device $hostAddress... "
 
-	ssh -p$hostPort root@$hostAddress "$cmdBin" $cmdArg "$packageFileOrName" || \
-		panic $? "Failed."
+	runCmdOnDevice "ssh -p$hostPort root@$hostAddress $cmdBin $cmdArg $packageFileOrName" "Failed."
 	
 	# success #
 	echo "Done."
@@ -595,8 +605,7 @@ function runFuncOnDevice() # args: function, hostAddress, hostPort
 	;;
 	esac
 
-	ssh -p$hostPort root@$hostAddress $cmd || \
-		panic $? "Failed to perform function $func on device $hostAddress"
+	runCmdOnDevice "ssh -p$hostPort root@$hostAddress $cmd" "Failed to perform function $func on device $hostAddress"
 }
 
 #sudo
@@ -846,6 +855,9 @@ function xcodeBuildPhase() # no args
 	fi
 
 	changeMode "$INSTALL_MODE_FLAG" "$builtExecutable"
+
+	sshpassProcessor=`which sshpass` || \
+		panic $? "Failed to locate sshpass. Is sshpass installed? If not, brew install https://raw.githubusercontent.com/kadwanev/bigboybrew/master/Library/Formula/sshpass.rb"
 
 	#是否需要拷贝到设备
 	if [[ "$MonkeyDevCopyOnBuild" == "YES" ]]; then
