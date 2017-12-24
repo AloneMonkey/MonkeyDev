@@ -856,8 +856,10 @@ function xcodeBuildPhase() # no args
 
 	changeMode "$INSTALL_MODE_FLAG" "$builtExecutable"
 
-	sshpassProcessor=`which sshpass` || \
+	if [[ "$MonkeyDevDevicePassword" != "" ]]; then
+		sshpassProcessor=`which sshpass` || \
 		panic $? "Failed to locate sshpass. Is sshpass installed? If not, brew install https://raw.githubusercontent.com/kadwanev/bigboybrew/master/Library/Formula/sshpass.rb"
+	fi
 
 	#是否需要拷贝到设备
 	if [[ "$MonkeyDevCopyOnBuild" == "YES" ]]; then
