@@ -37,6 +37,17 @@ function codesign()
 
 function checkApp(){
 	TARGET_APP_PATH="$1"
+
+	# remove Plugin an Watch
+	rm -rf "$TARGET_APP_PATH/PlugIns" || true
+	rm -rf "$TARGET_APP_PATH/Watch" || true
+
+	VERIFY_RESULT=`"$MONKEYPARSER" verify -t "$TARGET_APP_PATH"`
+
+	if [[ "$VERIFY_RESULT" != "" ]]; then
+		panic 1 "$VERIFY_RESULT"
+	fi
+
 	MACH_O_FILE_NAME=`plutil -convert xml1 -o - "$TARGET_APP_PATH/Info.plist" | grep -A1 Exec | tail -n1 | cut -f2 -d\> | cut -f1 -d\<`
 	MACH_O_FILE_PATH="$TARGET_APP_PATH/$MACH_O_FILE_NAME"
 	ARMV7=false
@@ -125,6 +136,7 @@ BUILD_APP_PATH="$BUILT_PRODUCTS_DIR/$TARGET_NAME.app"
 
 function pack(){
 	echo "packing..."
+
 	# environment
 	MONKEYDEV_TOOLS="$MONKEYDEV_PATH/Tools/"
 	DEMOTARGET_APP_PATH="$MONKEYDEV_PATH/Resource/TargetApp.app"
@@ -191,10 +203,6 @@ function pack(){
 	"$MONKEYPARSER" unrestrict -t "$BUILD_APP_PATH/$APP_BINARY"
 
 	chmod +x "$BUILD_APP_PATH/$APP_BINARY"
-
-	# remove Plugin an Watch
-	rm -rf "$BUILD_APP_PATH/PlugIns" || true
-	rm -rf "$BUILD_APP_PATH/Watch" || true
 
 	# Update Info.plist for Target App
 	if [[ "$CUSTOM_DISPLAY_NAME" != "" ]]; then
