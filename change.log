@@ -4,3 +4,4 @@
 - 3.3 重命名FrameworksForMac为MFrameworks
 - 3.3 增加sshpass，支持自己设置设备密码
 - 3.5 增加monkeyparser verify验证App、framework是否砸壳
+- 3.6 shell写的太丑了，class-dump和restore-symobl都交给monkeyparser去做

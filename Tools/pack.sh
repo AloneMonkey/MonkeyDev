@@ -39,97 +39,21 @@ function checkApp(){
 	TARGET_APP_PATH="$1"
 
 	# remove Plugin an Watch
-	rm -rf "$TARGET_APP_PATH/PlugIns" || true
-	rm -rf "$TARGET_APP_PATH/Watch" || true
+	 rm -rf "$TARGET_APP_PATH/PlugIns" || true
+	 rm -rf "$TARGET_APP_PATH/Watch" || true
 
-	VERIFY_RESULT=`"$MONKEYPARSER" verify -t "$TARGET_APP_PATH"`
+	 MACH_O_FILE_NAME=`plutil -convert xml1 -o - "$TARGET_APP_PATH/Info.plist" | grep -A1 Exec | tail -n1 | cut -f2 -d\> | cut -f1 -d\<`
 
-	if [[ "$VERIFY_RESULT" != "" ]]; then
-		panic 1 "$VERIFY_RESULT"
+	 TARGET_DUMP_DIR="${SRCROOT}/$TARGET_NAME/$MACH_O_FILE_NAME"_Headers
+
+
+	 VERIFY_RESULT=`export MONKEYDEV_CLASS_DUMP=${MONKEYDEV_CLASS_DUMP};MONKEYDEV_RESTORE_SYMBOL=${MONKEYDEV_RESTORE_SYMBOL};"$MONKEYPARSER" verify -t "$TARGET_APP_PATH" -o "$TARGET_DUMP_DIR"`
+
+	if [[ $? -eq 16 ]]; then
+	  	panic 1 "$VERIFY_RESULT"
+	else
+	  	echo "$VERIFY_RESULT"
 	fi
-
-	MACH_O_FILE_NAME=`plutil -convert xml1 -o - "$TARGET_APP_PATH/Info.plist" | grep -A1 Exec | tail -n1 | cut -f2 -d\> | cut -f1 -d\<`
-	MACH_O_FILE_PATH="$TARGET_APP_PATH/$MACH_O_FILE_NAME"
-	ARMV7=false
- 	ARM64=false
- 	FAT_FILE=false
- 	[[ $(lipo -info "$MACH_O_FILE_PATH" | grep armv7) == "" ]] || ARMV7=true
- 	[[ $(lipo -info "$MACH_O_FILE_PATH" | grep arm64) == "" ]] || ARM64=true
- 	[[ $(lipo -info "$MACH_O_FILE_PATH" | grep "Non-fat file") != "" ]] || FAT_FILE=true
- 	echo "has arm7 arch? $ARMV7"
- 	echo "has arm64 arch? $ARM64"
- 	echo "is fat file? $FAT_FILE"
- 	if [[ ! ARMV7 && ! ARM64 ]]; then
-  		panic 1 "The target does not contain armv7 or arm64 arch!!!"
- 	fi
- 	decrypted_num=$(otool -l "$MACH_O_FILE_PATH" | grep "cryptid 0" | wc -l | tr -d " ")
- 	echo "decrypted arch num? $decrypted_num"
- 	if [[ "$decrypted_num" == "0" ]]; then
- 		panic 1 "can't find decrypted arch!!!"
- 	fi
- 	if [[ "$decrypted_num" == "1" ]] && "$FAT_FILE"; then
- 		if "$ARMV7"; then
- 			lipo -thin armv7 $MACH_O_FILE_PATH -o $MACH_O_FILE_PATH
- 		fi
- 		if "$ARM64"; then
- 			lipo -thin arm64 $MACH_O_FILE_PATH -o $MACH_O_FILE_PATH
- 		fi
- 	fi
- 	#class_dump
- 	if [[ ! -f "$TARGET_APP_PATH"/md_class_dump ]] && [[ "${MONKEYDEV_CLASS_DUMP}" == "YES" ]]; then
- 		TARGET_DUMP_DIR="${SRCROOT}/$TARGET_NAME/$MACH_O_FILE_NAME"_Headers
- 		if [[ -d "$TARGET_DUMP_DIR" ]]; then
- 			rm -rf "$TARGET_DUMP_DIR" || true
- 		fi
- 		mkdir -p "$TARGET_DUMP_DIR"
-
- 		if "$FAT_FILE" && "$ARMV7" && "$ARM64" && [[ "$decrypted_num" == "1" ]]; then
- 			decrypted_arch="arm64"
- 			lipo -thin armv7 $MACH_O_FILE_PATH -o $TEMP_PATH/"$MACH_O_FILE_NAME"_armv7
-			lipo -thin arm64 $MACH_O_FILE_PATH -o $TEMP_PATH/"$MACH_O_FILE_NAME"_arm64
- 			[[ $(otool -l $TEMP_PATH/"$MACH_O_FILE_NAME"_armv7 | grep "cryptid 0") == "" ]] || decrypted_arch="armv7"
- 			[[ $(otool -l $TEMP_PATH/"$MACH_O_FILE_NAME"_arm64 | grep "cryptid 0") == "" ]] || decrypted_arch="arm64"
- 			echo "current decrypted arch: $decrypted_arch"
- 			"$CLASS_DUMP_TOOL" "$MACH_O_FILE_PATH" --arch "$decrypted_arch" -H -o "$TARGET_DUMP_DIR"
- 		else
- 			"$CLASS_DUMP_TOOL" "$MACH_O_FILE_PATH" -H -o "$TARGET_DUMP_DIR"
- 		fi
- 		echo "finsih_class_dump" >> "$TARGET_APP_PATH"/md_class_dump
- 	fi
-
- 	#restore_symbol
- 	if [[ ! -f "$TARGET_APP_PATH"/md_restore_symbol ]] && [[ "${MONKEYDEV_RESTORE_SYMBOL}" == "YES" ]]; then
- 		if "$FAT_FILE"; then
- 			if "$ARMV7" && "$ARM64"; then
- 				echo "fat: armv7 and arm64"
- 				lipo -thin armv7 "$MACH_O_FILE_PATH" -o "$TEMP_PATH/$MACH_O_FILE_NAME"_armv7
-				lipo -thin arm64 "$MACH_O_FILE_PATH" -o "$TEMP_PATH/$MACH_O_FILE_NAME"_arm64
-				"$MONKEYPARSER" restoresymbol -t "$TEMP_PATH/$MACH_O_FILE_NAME"_armv7 -o "$TEMP_PATH/$MACH_O_FILE_NAME"_armv7_with_symbol
-				"$MONKEYPARSER" restoresymbol -t "$TEMP_PATH/$MACH_O_FILE_NAME"_arm64 -o "$TEMP_PATH/$MACH_O_FILE_NAME"_arm64_with_symbol
-				lipo -create "$TEMP_PATH/$MACH_O_FILE_NAME"_armv7_with_symbol "$TEMP_PATH/$MACH_O_FILE_NAME"_arm64_with_symbol -o "$TEMP_PATH/$MACH_O_FILE_NAME"_with_symbol
-				cp -rf "$TEMP_PATH/$MACH_O_FILE_NAME"_with_symbol "$MACH_O_FILE_PATH"
-			elif "$ARMV7"; then
-				echo "fat: armv7"
-				lipo -thin armv7 "$MACH_O_FILE_PATH" -o "$TEMP_PATH/$MACH_O_FILE_NAME"_armv7
-				"$MONKEYPARSER" restoresymbol -t "$TEMP_PATH/$MACH_O_FILE_NAME"_armv7 -o "$TEMP_PATH/$MACH_O_FILE_NAME"_armv7_with_symbol
-	 			cp -rf "$TEMP_PATH/$MACH_O_FILE_NAME"_armv7_with_symbol "$MACH_O_FILE_PATH"
- 			elif "$ARM64"; then
- 				echo "fat: arm64"
- 				lipo -thin arm64 "$MACH_O_FILE_PATH" -o "$TEMP_PATH/$MACH_O_FILE_NAME"_arm64
- 				"$MONKEYPARSER" restoresymbol -t "$TEMP_PATH/$MACH_O_FILE_NAME"_arm64 -o "$TEMP_PATH/$MACH_O_FILE_NAME"_arm64_with_symbol
-	 			cp -rf "$TEMP_PATH/$MACH_O_FILE_NAME"_arm64_with_symbol "$MACH_O_FILE_PATH"
- 			fi
-	 	elif "$ARMV7"; then
-	 		echo "armv7"
-	 		"$MONKEYPARSER" restoresymbol -t "$MACH_O_FILE_PATH" -o "$TEMP_PATH/$MACH_O_FILE_NAME"_armv7_with_symbol
-	 		cp -rf $TEMP_PATH/"$MACH_O_FILE_NAME"_armv7_with_symbol "$MACH_O_FILE_PATH"
-	 	elif "$ARM64"; then
-	 		echo "arm64"
-	 		"$MONKEYPARSER" restoresymbol -t "$MACH_O_FILE_PATH" -o "$TEMP_PATH/$MACH_O_FILE_NAME"_arm64_with_symbol
-	 		cp -rf $TEMP_PATH/"$MACH_O_FILE_NAME"_arm64_with_symbol "$MACH_O_FILE_PATH"
-	 	fi
-	 	echo "finsih_restore_symbol" >> "$TARGET_APP_PATH"/md_restore_symbol
- 	fi
 }
 
 BUILD_APP_PATH="$BUILT_PRODUCTS_DIR/$TARGET_NAME.app"
