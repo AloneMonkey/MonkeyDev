@@ -5,3 +5,7 @@
 - 3.3 增加sshpass，支持自己设置设备密码
 - 3.5 增加monkeyparser verify验证App、framework是否砸壳
 - 3.6 shell写的太丑了，class-dump和restore-symobl都交给monkeyparser去做
+- 3.7 二进制文件瘦身，减少下载文件大小
+
+todo:
+增量更新

@@ -1,0 +1,3 @@
+[submodule "Templates"]
+	path = Templates
+	url = https://github.com/AloneMonkey/MonkeyDev-Xcode-Templates.git
