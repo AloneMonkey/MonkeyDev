@@ -6,3 +6,4 @@
 - 3.5 增加monkeyparser verify验证App、framework是否砸壳
 - 3.6 shell写的太丑了，class-dump和restore-symobl都交给monkeyparser去做
 - 3.7 二进制文件瘦身，减少下载文件大小
+- 3.8 可以选择Debug和Release，Release下不集成Cycript和Reveal

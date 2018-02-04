@@ -4,6 +4,14 @@ MONKEYPARSER="$MONKEYDEV_PATH/bin/monkeyparser"
 CREATE_IPA="$MONKEYDEV_PATH/bin/createIPA.command"
 CLASS_DUMP_TOOL="$MONKEYDEV_PATH/bin/class-dump"
 
+function isRelease(){
+	if [ $CONFIGURATION == Release ]; then
+		return 0 #true
+	else
+		return 1 #false
+	fi
+}
+
 function panic() # args: exitCode, message...
 {
 	local exitCode=$1
@@ -107,6 +115,10 @@ function pack(){
 
 	cp -rf "$BUILT_PRODUCTS_DIR/lib""$TARGET_NAME""Dylib.dylib" "$TARGET_APP_FRAMEWORKS_PATH"
 	cp -rf "$FRAMEWORKS_TO_INJECT_PATH" "$TARGET_APP_FRAMEWORKS_PATH"
+
+	if isRelease; then
+		rm -rf "$TARGET_APP_FRAMEWORKS_PATH"/RevealServer.framework
+	fi
 
 	if [[ -d "$SRCROOT/$TARGET_NAME/Resources" ]]; then
 	 for file in "$SRCROOT/$TARGET_NAME/Resources"/*; do
