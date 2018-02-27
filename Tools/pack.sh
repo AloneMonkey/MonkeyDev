@@ -77,9 +77,11 @@ function pack(){
 	CUSTOM_URL_TYPE=$(/usr/libexec/PlistBuddy -x -c "Print CFBundleURLTypes"  "${SRCROOT}/$TARGET_NAME/Info.plist")
 	CUSTOM_BUNDLE_ID="$PRODUCT_BUNDLE_IDENTIFIER"
 
+	#create tmp dir
 	rm -rf "$TEMP_PATH" || true
 	mkdir -p "$TEMP_PATH" || true
 
+	#latestbuild
 	rm -rf "${PROJECT_DIR}"/LatestBuild || true
 	ln -fhs "${BUILT_PRODUCTS_DIR}" "${PROJECT_DIR}"/LatestBuild
 	cp -rf "$CREATE_IPA" "${PROJECT_DIR}"/LatestBuild/
@@ -88,12 +90,18 @@ function pack(){
 	TARGET_APP_PATH=$(find "$SRCROOT/$TARGET_NAME/TargetApp" -type d | grep ".app$" | head -n 1)
 	TARGET_IPA_PATH=$(find "$SRCROOT/$TARGET_NAME/TargetApp" -type f | grep ".ipa$" | head -n 1)
 
-	if [[ "$TARGET_APP_PATH" == "" ]] && [[ "$TARGET_IPA_PATH" != "" ]]; then
+	if [[ ! $TARGET_APP_PATH ]] || [[ ! $TARGET_IPA_PATH ]]; then
+		TARGET_APP_PATH=$(find "$SRCROOT/$TARGET_NAME" -type d | grep ".app$" | head -n 1)
+		TARGET_IPA_PATH=$(find "$SRCROOT/$TARGET_NAME" -type f | grep ".ipa$" | head -n 1)
+	fi
+
+	if [[ ! $TARGET_APP_PATH ]] && [[ $TARGET_IPA_PATH ]]; then
 		unzip -oqq "$TARGET_IPA_PATH" -d "$TEMP_PATH"
 		TEMP_APP_PATH=$(set -- "$TEMP_PATH/Payload/"*.app; echo "$1")
 		cp -rf "$TEMP_APP_PATH" "$SRCROOT/$TARGET_NAME/TargetApp/"
 	fi
 
+	#remove origin .app
 	rm -rf "$BUILD_APP_PATH" || true
 	mkdir -p "$BUILD_APP_PATH" || true
 
