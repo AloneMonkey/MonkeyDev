@@ -201,12 +201,9 @@ function pack(){
 	if [[ -f "${SRCROOT}/../Pods/Target Support Files/Pods-""$TARGET_NAME""Dylib/Pods-""$TARGET_NAME""Dylib-resources.sh" ]]; then
 		source "${SRCROOT}/../Pods/Target Support Files/Pods-""$TARGET_NAME""Dylib/Pods-""$TARGET_NAME""Dylib-resources.sh"
 	fi
-
-	mv "$BUILD_APP_PATH/Info.plist" "$BUILD_APP_PATH/Info.plist.bak" 
 }
 
 if [[ "$1" == "codesign" ]]; then
-	mv "$BUILD_APP_PATH/Info.plist.bak" "$BUILD_APP_PATH/Info.plist" 
 	codesign "$BUILD_APP_PATH"
 else
 	pack
