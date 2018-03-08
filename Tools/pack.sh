@@ -124,8 +124,10 @@ function pack(){
 		mkdir -p "$TARGET_APP_FRAMEWORKS_PATH"
 	fi
 
-	cp -rf "$BUILT_PRODUCTS_DIR/lib""$TARGET_NAME""Dylib.dylib" "$TARGET_APP_FRAMEWORKS_PATH"
-	cp -rf "$FRAMEWORKS_TO_INJECT_PATH" "$TARGET_APP_FRAMEWORKS_PATH"
+	if [[ ${MONKEYDEV_INSERT_DYLIB} == "YES" ]];then
+		cp -rf "$BUILT_PRODUCTS_DIR/lib""$TARGET_NAME""Dylib.dylib" "$TARGET_APP_FRAMEWORKS_PATH"
+		cp -rf "$FRAMEWORKS_TO_INJECT_PATH" "$TARGET_APP_FRAMEWORKS_PATH"
+	fi
 
 	if isRelease; then
 		rm -rf "$TARGET_APP_FRAMEWORKS_PATH"/RevealServer.framework
@@ -146,10 +148,12 @@ function pack(){
 	# Inject the Dynamic Lib
 	APP_BINARY=`plutil -convert xml1 -o - $BUILD_APP_PATH/Info.plist | grep -A1 Exec | tail -n1 | cut -f2 -d\> | cut -f1 -d\<`
 
-	"$MONKEYPARSER" install -c load -p "@executable_path/Frameworks/lib""$TARGET_NAME""Dylib.dylib" -t "$BUILD_APP_PATH/$APP_BINARY"
-	"$MONKEYPARSER" unrestrict -t "$BUILD_APP_PATH/$APP_BINARY"
+	if [[ ${MONKEYDEV_INSERT_DYLIB} == "YES" ]];then
+		"$MONKEYPARSER" install -c load -p "@executable_path/Frameworks/lib""$TARGET_NAME""Dylib.dylib" -t "$BUILD_APP_PATH/$APP_BINARY"
+		"$MONKEYPARSER" unrestrict -t "$BUILD_APP_PATH/$APP_BINARY"
 
-	chmod +x "$BUILD_APP_PATH/$APP_BINARY"
+		chmod +x "$BUILD_APP_PATH/$APP_BINARY"
+	fi
 
 	# Update Info.plist for Target App
 	if [[ "$CUSTOM_DISPLAY_NAME" != "" ]]; then
@@ -205,6 +209,9 @@ function pack(){
 
 if [[ "$1" == "codesign" ]]; then
 	codesign "$BUILD_APP_PATH"
+	if [[ ${MONKEYDEV_INSERT_DYLIB} == "NO" ]];then
+		rm -rf "$BUILD_APP_PATH/Frameworks/lib""$TARGET_NAME""Dylib.dylib"
+	fi
 else
 	pack
 fi
