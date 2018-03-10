@@ -4,6 +4,11 @@ MONKEYPARSER="$MONKEYDEV_PATH/bin/monkeyparser"
 CREATE_IPA="$MONKEYDEV_PATH/bin/createIPA.command"
 CLASS_DUMP_TOOL="$MONKEYDEV_PATH/bin/class-dump"
 
+#for old version
+if [[ ! ${MONKEYDEV_INSERT_DYLIB} ]];then
+	MONKEYDEV_INSERT_DYLIB=YES
+fi
+
 function isRelease(){
 	if [ $CONFIGURATION == Release ]; then
 		return 0 #true
