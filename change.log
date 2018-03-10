@@ -1,4 +1,4 @@
-./md
+/opt/MonkeyDev/bin/md
 
 - 3.0 使用monkeyparser替换restore-symbol、optool、unsign
 - 3.3 重命名FrameworksForMac为MFrameworks

@@ -59,7 +59,6 @@ function checkApp(){
 
 	 TARGET_DUMP_DIR="${SRCROOT}/$TARGET_NAME/$MACH_O_FILE_NAME"_Headers
 
-
 	 VERIFY_RESULT=`export MONKEYDEV_CLASS_DUMP=${MONKEYDEV_CLASS_DUMP};MONKEYDEV_RESTORE_SYMBOL=${MONKEYDEV_RESTORE_SYMBOL};"$MONKEYPARSER" verify -t "$TARGET_APP_PATH" -o "$TARGET_DUMP_DIR"`
 
 	if [[ $? -eq 16 ]]; then
@@ -119,6 +118,7 @@ function pack(){
 		cp -rf "$TARGET_APP_PATH/" "$BUILD_APP_PATH/"
 		echo "copy $TARGET_APP_PATH to $BUILD_APP_PATH"
 	else 
+		checkApp "$DEMOTARGET_APP_PATH"
 		cp -rf "$DEMOTARGET_APP_PATH/" "$BUILD_APP_PATH/"
 	fi
 
