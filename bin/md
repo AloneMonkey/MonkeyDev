@@ -6,7 +6,7 @@ $setCmd
 export PATH=/opt/MonkeyDev/bin:$MonkeyDevTheosPath/bin:/usr/local/bin:/usr/bin:/usr/sbin:/bin:/sbin:$PATH
 
 export scriptName="${0##*/}"
-export scriptVer="4.0"
+export scriptVer="4.1"
 export originalArguments=("$@")
 export activeActionArg
 

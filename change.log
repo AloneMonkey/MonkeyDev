@@ -8,3 +8,4 @@
 - 3.7 二进制文件瘦身，减少下载文件大小
 - 3.8 可以选择Debug和Release，Release下不集成Cycript和Reveal
 - 4.0 优化目录结构，增加快速重签脚本 
+- 4.1 集成frida-ios-dump，直接在TargetApp目录下执行dump.py xxx即可
