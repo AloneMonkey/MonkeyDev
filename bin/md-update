@@ -137,4 +137,11 @@ function downloadGithubTarball() # args: url, outputDir, title
 downloadGithubTarball "https://codeload.github.com/AloneMonkey/MonkeyDev/tar.gz/master" "$MonkeyDevPath" "MonkeyDev base"
 downloadGithubTarball "https://codeload.github.com/AloneMonkey/MonkeyDev-Xcode-Templates/tar.gz/master" "$MonkeyDevPath/templates" "Xcode templates"
 
+#更新frida-ios-dump
+echo "Downloading frida-ios-dump from Github..."
+downloadFile "https://raw.githubusercontent.com/AloneMonkey/frida-ios-dump/master/dump.py" "$MonkeyDevPath/bin/dump.py"
+downloadFile "https://raw.githubusercontent.com/AloneMonkey/frida-ios-dump/master/dump.js" "$MonkeyDevPath/bin/dump.js"
+
+chmod +x "$MonkeyDevPath/bin/dump.py"
+
 exit 0
