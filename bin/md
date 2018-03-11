@@ -660,14 +660,18 @@ function Processor()
 	  	if [[ -d "$currentDirectory/$file" ]]; then
 	  		Processor "$logosProcessor" "$currentDirectory/$file"
 	  	elif [[ "$extension" == "xm" ]]; then
-	  		echo "Logos Processor: $filename -> ${filename%.*}.mm..."
-	  		logosStdErr=$(("$logosProcessor" "$currentDirectory/$file" > "$currentDirectory/${file%.*}.mm") 2>&1) || \
-				panic $? "Failed Logos Processor: $logosStdErr"
+			if [[ ! -f $currentDirectory/${file%.*}.mm ]] || [[ `stat -f %c $currentDirectory/$file` > `stat -f %c $currentDirectory/${file%.*}.mm` ]]; then
+	  			echo "Logos Processor: $filename -> ${filename%.*}.mm..."
+	  			logosStdErr=$(("$logosProcessor" "$currentDirectory/$file" > "$currentDirectory/${file%.*}.mm") 2>&1) || \
+					panic $? "Failed Logos Processor: $logosStdErr"
+			fi
 
 	  	elif [[ "$extension" == "x" ]]; then
-	  		echo "Logos Processor: $filename -> ${filename%.*}.mm..."
-	  		logosStdErr=$(("$logosProcessor" "$currentDirectory/$file" > "$currentDirectory/${file%.*}.m") 2>&1) || \
-				panic $? "Failed Logos Processor: $logosStdErr"
+			if [[ ! -f $currentDirectory/${file%.*}.m ]] || [[ `stat -f %c $currentDirectory/$file` > `stat -f %c $currentDirectory/${file%.*}.m` ]]; then
+		  		echo "Logos Processor: $filename -> ${filename%.*}.m..."
+		  		logosStdErr=$(("$logosProcessor" "$currentDirectory/$file" > "$currentDirectory/${file%.*}.m") 2>&1) || \
+					panic $? "Failed Logos Processor: $logosStdErr"
+			fi
 			
 	  	fi
     done
