@@ -8,6 +8,9 @@ CLASS_DUMP_TOOL="$MONKEYDEV_PATH/bin/class-dump"
 if [[ ! ${MONKEYDEV_INSERT_DYLIB} ]];then
 	MONKEYDEV_INSERT_DYLIB=YES
 fi
+if [[ ! ${MONKEYDEV_TARGET_APP} ]];then
+	MONKEYDEV_TARGET_APP="Optional"
+fi
 
 function isRelease(){
 	if [ $CONFIGURATION == Release ]; then
@@ -91,15 +94,17 @@ function pack(){
 	cp -rf "$CREATE_IPA" "${PROJECT_DIR}"/LatestBuild/
 
 	#deal ipa or app
-	TARGET_APP_PATH=$(find "$SRCROOT/$TARGET_NAME/TargetApp" -type d | grep ".app$" | head -n 1)
-	TARGET_IPA_PATH=$(find "$SRCROOT/$TARGET_NAME/TargetApp" -type f | grep ".ipa$" | head -n 1)
+	TARGET_APP_PATH=$(find "$SRCROOT/$TARGET_NAME" -type d | grep ".app$" | head -n 1)
+	TARGET_IPA_PATH=$(find "$SRCROOT/$TARGET_NAME" -type f | grep ".ipa$" | head -n 1)
 
-	if [[ ! $TARGET_APP_PATH ]] || [[ ! $TARGET_IPA_PATH ]]; then
-		TARGET_APP_PATH=$(find "$SRCROOT/$TARGET_NAME" -type d | grep ".app$" | head -n 1)
-		TARGET_IPA_PATH=$(find "$SRCROOT/$TARGET_NAME" -type f | grep ".ipa$" | head -n 1)
-		if [[ $TARGET_APP_PATH ]]; then
-			cp -rf $TARGET_APP_PATH "$SRCROOT/$TARGET_NAME/TargetApp"
-		fi
+	if [[ $TARGET_APP_PATH ]]; then
+		cp -rf $TARGET_APP_PATH "$SRCROOT/$TARGET_NAME/TargetApp"
+	fi
+
+	if [[ ! $TARGET_APP_PATH ]] && [[ ! $TARGET_IPA_PATH ]] && [[ ${MONKEYDEV_TARGET_APP} != "Optional" ]]; then
+		echo "pulling decrypted ipa from jailbreak device......."
+		"$MONKEYDEV_PATH/bin/dump.py" ${MONKEYDEV_TARGET_APP} -o "$SRCROOT/$TARGET_NAME/TargetApp/TargetApp.ipa" || panic 1 "dump.py error"
+		TARGET_IPA_PATH=$(find "$SRCROOT/$TARGET_NAME/TargetApp" -type f | grep ".ipa$" | head -n 1)
 	fi
 
 	if [[ ! $TARGET_APP_PATH ]] && [[ $TARGET_IPA_PATH ]]; then
