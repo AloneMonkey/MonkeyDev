@@ -681,7 +681,7 @@ function Processor()
 function xcodeBuildPhase_Logos() # no args
 {
 	[[ "$ACTION" == "build" ]] || \
-		panic 1 "For Xcode Build Phase use only"
+		panic 1 "For Xcode Build Phase use only, Not support Archive, Please use LatestBuild/createIPA.command to generate ipa."
 	
 	echo "Preparing to run Xcode Build Phase for Logos Processor..."
 
