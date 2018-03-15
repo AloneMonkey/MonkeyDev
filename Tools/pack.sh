@@ -32,25 +32,6 @@ function panic() # args: exitCode, message...
 	exit $exitCode
 }
 
-function codesign()
-{
-    for file in `ls "$1"`;
-    do
-		extension="${file#*.}"
-        if [[ -d "$1/$file" ]]; then
-			if [[ "$extension" == "framework" ]]; then
-        			/usr/bin/codesign --force --sign "$EXPANDED_CODE_SIGN_IDENTITY" "$1/$file"
-			else
-				codesign "$1/$file"
-			fi
-		elif [[ -f "$1/$file" ]]; then
-			if [[ "$extension" == "dylib" ]]; then
-        			/usr/bin/codesign --force --sign "$EXPANDED_CODE_SIGN_IDENTITY" "$1/$file"
-        	fi
-        fi
-    done
-}
-
 function checkApp(){
 	TARGET_APP_PATH="$1"
 
@@ -218,7 +199,7 @@ function pack(){
 }
 
 if [[ "$1" == "codesign" ]]; then
-	codesign "$BUILD_APP_PATH"
+	"$MONKEYPARSER" codesign -i "$EXPANDED_CODE_SIGN_IDENTITY" -t "$BUILD_APP_PATH"
 	if [[ ${MONKEYDEV_INSERT_DYLIB} == "NO" ]];then
 		rm -rf "$BUILD_APP_PATH/Frameworks/lib""$TARGET_NAME""Dylib.dylib"
 	fi
