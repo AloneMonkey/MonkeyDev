@@ -79,7 +79,7 @@ function pack(){
 	TARGET_IPA_PATH=$(find "$SRCROOT/$TARGET_NAME" -type f | grep ".ipa$" | head -n 1)
 
 	if [[ $TARGET_APP_PATH ]]; then
-		cp -rf $TARGET_APP_PATH "$SRCROOT/$TARGET_NAME/TargetApp"
+		cp -rf "$TARGET_APP_PATH" "$SRCROOT/$TARGET_NAME/TargetApp"
 	fi
 
 	if [[ ! $TARGET_APP_PATH ]] && [[ ! $TARGET_IPA_PATH ]] && [[ ${MONKEYDEV_TARGET_APP} != "Optional" ]]; then
