@@ -39,11 +39,9 @@ function checkApp(){
 	 rm -rf "$TARGET_APP_PATH/PlugIns" || true
 	 rm -rf "$TARGET_APP_PATH/Watch" || true
 
-	 MACH_O_FILE_NAME=`plutil -convert xml1 -o - "$TARGET_APP_PATH/Info.plist" | grep -A1 Exec | tail -n1 | cut -f2 -d\> | cut -f1 -d\<`
+	 TARGET_OUT_DIR="${SRCROOT}/$TARGET_NAME"
 
-	 TARGET_DUMP_DIR="${SRCROOT}/$TARGET_NAME/$MACH_O_FILE_NAME"_Headers
-
-	 VERIFY_RESULT=`export MONKEYDEV_CLASS_DUMP=${MONKEYDEV_CLASS_DUMP};MONKEYDEV_RESTORE_SYMBOL=${MONKEYDEV_RESTORE_SYMBOL};"$MONKEYPARSER" verify -t "$TARGET_APP_PATH" -o "$TARGET_DUMP_DIR"`
+	 VERIFY_RESULT=`export MONKEYDEV_CLASS_DUMP=${MONKEYDEV_CLASS_DUMP};MONKEYDEV_RESTORE_SYMBOL=${MONKEYDEV_RESTORE_SYMBOL};"$MONKEYPARSER" verify -t "$TARGET_APP_PATH" -o "$TARGET_OUT_DIR"`
 
 	if [[ $? -eq 16 ]]; then
 	  	panic 1 "$VERIFY_RESULT"
@@ -79,7 +77,7 @@ function pack(){
 	TARGET_IPA_PATH=$(find "$SRCROOT/$TARGET_NAME" -type f | grep ".ipa$" | head -n 1)
 
 	if [[ $TARGET_APP_PATH ]]; then
-		cp -rf "$TARGET_APP_PATH" "$SRCROOT/$TARGET_NAME/TargetApp"
+		cp -rf $TARGET_APP_PATH "$SRCROOT/$TARGET_NAME/TargetApp"
 	fi
 
 	if [[ ! $TARGET_APP_PATH ]] && [[ ! $TARGET_IPA_PATH ]] && [[ ${MONKEYDEV_TARGET_APP} != "Optional" ]]; then
