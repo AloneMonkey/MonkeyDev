@@ -39,6 +39,8 @@ function checkApp(){
 	 rm -rf "$TARGET_APP_PATH/PlugIns" || true
 	 rm -rf "$TARGET_APP_PATH/Watch" || true
 
+	 rm -rf "${SRCROOT}/$TARGET_NAME/Target.plist"
+	 ln -s "$TARGET_APP_PATH/Info.plist" "${SRCROOT}/$TARGET_NAME/Target.plist"
 	 /usr/libexec/PlistBuddy -c 'Delete UISupportedDevices' "$TARGET_APP_PATH/Info.plist"
 
 	 TARGET_OUT_DIR="${SRCROOT}/$TARGET_NAME"
