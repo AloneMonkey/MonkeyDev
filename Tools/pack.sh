@@ -39,6 +39,8 @@ function checkApp(){
 	 rm -rf "$TARGET_APP_PATH/PlugIns" || true
 	 rm -rf "$TARGET_APP_PATH/Watch" || true
 
+	 /usr/libexec/PlistBuddy -c 'Delete UISupportedDevices' "$TARGET_APP_PATH/Info.plist"
+
 	 TARGET_OUT_DIR="${SRCROOT}/$TARGET_NAME"
 
 	 VERIFY_RESULT=`export MONKEYDEV_CLASS_DUMP=${MONKEYDEV_CLASS_DUMP};MONKEYDEV_RESTORE_SYMBOL=${MONKEYDEV_RESTORE_SYMBOL};"$MONKEYPARSER" verify -t "$TARGET_APP_PATH" -o "$TARGET_OUT_DIR"`
