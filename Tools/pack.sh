@@ -11,6 +11,9 @@ fi
 if [[ ! ${MONKEYDEV_TARGET_APP} ]];then
 	MONKEYDEV_TARGET_APP="Optional"
 fi
+if [[ ! ${MONKEYDEV_ADD_SUBSTRATE} ]];then
+	MONKEYDEV_ADD_SUBSTRATE=YES
+fi
 
 function isRelease(){
 	if [ $CONFIGURATION == Release ]; then
@@ -120,10 +123,12 @@ function pack(){
 	if [[ ${MONKEYDEV_INSERT_DYLIB} == "YES" ]];then
 		cp -rf "$BUILT_PRODUCTS_DIR/lib""$TARGET_NAME""Dylib.dylib" "$TARGET_APP_FRAMEWORKS_PATH"
 		cp -rf "$FRAMEWORKS_TO_INJECT_PATH" "$TARGET_APP_FRAMEWORKS_PATH"
-	fi
-
-	if isRelease; then
-		rm -rf "$TARGET_APP_FRAMEWORKS_PATH"/RevealServer.framework
+		if [[ ${MONKEYDEV_ADD_SUBSTRATE} != "YES" ]];then
+			rm -rf "$TARGET_APP_FRAMEWORKS_PATH/libsubstrate.dylib"
+		fi
+		if isRelease; then
+			rm -rf "$TARGET_APP_FRAMEWORKS_PATH"/RevealServer.framework
+		fi
 	fi
 
 	if [[ -d "$SRCROOT/$TARGET_NAME/Resources" ]]; then
