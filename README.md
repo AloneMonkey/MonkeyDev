@@ -38,3 +38,7 @@ Plese Read Wiki: [Wiki](https://github.com/AloneMonkey/MonkeyDev/wiki)
 
 
 非越狱插件CocoaPods私有仓库地址:[MonkeyDevSpecs](https://github.com/AloneMonkey/MonkeyDevSpecs)
+
+
+
+**免责声明: 软件仅供技术交流，禁止用于商业及非法用途，如产生法律纠纷与本人无关。**
