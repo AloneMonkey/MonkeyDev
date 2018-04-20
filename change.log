@@ -9,3 +9,4 @@
 - 3.8 可以选择Debug和Release，Release下不集成Cycript和Reveal
 - 4.0 优化目录结构，增加快速重签脚本 
 - 4.1 集成frida-ios-dump，直接在TargetApp目录下执行dump.py xxx即可
+- 4.2 集成新的cycript，支持从网络下载cy脚本，直接@import

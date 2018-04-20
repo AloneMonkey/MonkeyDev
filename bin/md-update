@@ -133,9 +133,15 @@ function downloadGithubTarball() # args: url, outputDir, title
 	cp -fR "$untardDir/"* "$outputDir/"
 }
 
+branch="master"
+
+if [[ "$1" ]]; then
+	branch="$1"
+fi
+
 #更新一些基础文件和模板文件
-downloadGithubTarball "https://codeload.github.com/AloneMonkey/MonkeyDev/tar.gz/master" "$MonkeyDevPath" "MonkeyDev base"
-downloadGithubTarball "https://codeload.github.com/AloneMonkey/MonkeyDev-Xcode-Templates/tar.gz/master" "$MonkeyDevPath/templates" "Xcode templates"
+downloadGithubTarball "https://codeload.github.com/AloneMonkey/MonkeyDev/tar.gz/$branch" "$MonkeyDevPath" "MonkeyDev base"
+downloadGithubTarball "https://codeload.github.com/AloneMonkey/MonkeyDev-Xcode-Templates/tar.gz/$branch" "$MonkeyDevPath/templates" "Xcode templates"
 
 #更新frida-ios-dump
 echo "Downloading frida-ios-dump from Github..."

@@ -128,6 +128,7 @@ function pack(){
 		fi
 		if isRelease; then
 			rm -rf "$TARGET_APP_FRAMEWORKS_PATH"/RevealServer.framework
+			rm -rf "$TARGET_APP_FRAMEWORKS_PATH"/libcycript*
 		fi
 	fi
 
