@@ -357,7 +357,7 @@ process.pid = getpid();
 
 let loadpaths = MDCycriptManager.sharedInstance().loadAtLaunchs();
 for(var i = 0; i < loadpaths.length; i++){
-    require(loadpaths[i].toString);
+    require(loadpaths[i].toString());
 }
 
 })();
