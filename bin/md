@@ -241,7 +241,7 @@ function copyFileToDevice() # args: sourceFile, targetDir, hostAddress, hostPort
 		
 	runCmdOnDevice "ssh -p$hostPort root@$hostAddress rm -f \"$targetFilePath\"" "Failed to remove existing file $targetFilePath on device $hostAddress"
 	
-	runCmdOnDevice "scp -P$hostPort $sourceFile root@$hostAddress:\"$targetFilePath\"" "Failed to copy file $sourceFile to device $hostAddress at directory $targetDir"
+	runCmdOnDevice "scp -P$hostPort \"$sourceFile\" root@$hostAddress:\"$targetFilePath\"" "Failed to copy file $sourceFile to device $hostAddress at directory $targetDir"
 }
 
 function getBashProfileEnvVarValue() # args: envVarName
