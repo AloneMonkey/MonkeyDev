@@ -43,8 +43,9 @@ Plese Read Wiki: [Wiki](https://github.com/AloneMonkey/MonkeyDev/wiki)
 
 **免责声明: 软件仅供技术交流，禁止用于商业及非法用途，如产生法律纠纷与本人无关。**
 
+<br>
 
-<center><h2>《iOS应用逆向与安全》出版啦！！！</h2></center>
+<h2>《iOS应用逆向与安全》出版啦！！！</h2>
 
 # 购书链接
 
@@ -56,4 +57,4 @@ Plese Read Wiki: [Wiki](https://github.com/AloneMonkey/MonkeyDev/wiki)
 
 #### 亚马逊: [https://www.amazon.cn/dp/B07D5952BR/](https://www.amazon.cn/dp/B07D5952BR/)
 
-<center><h3>请大家多多支持正版哦~</h3></center>
+<h3>请大家多多支持正版哦~</h3>
