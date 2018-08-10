@@ -22,7 +22,11 @@ run "mkdir ${DIR}/Payload"
 APP=$(find ${DIR} -type d | grep ".app$" | head -n 1)
 
 run "cp -rf ${APP} ${DIR}/Payload"
-run "zip -qr ${DIR}/Target.ipa ${DIR}/Payload"
+
+run "pushd ${DIR}"
+run "zip -qr ${DIR}/Target.ipa ./Payload"
+run "popd"
+
 run "rm -rf ${DIR}/Payload"
 
 echo "==================MonkeyDev(done)=================="
