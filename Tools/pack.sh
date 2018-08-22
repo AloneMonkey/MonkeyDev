@@ -89,7 +89,7 @@ function pack(){
 
 	if [[ ! ${TARGET_APP_PATH} ]] && [[ ! ${TARGET_IPA_PATH} ]] && [[ ${MONKEYDEV_TARGET_APP} != "Optional" ]]; then
 		echo "pulling decrypted ipa from jailbreak device......."
-		${MONKEYDEV_PATH}/bin/dump.py ${MONKEYDEV_TARGET_APP} -o "${TARGET_APP_PUT_PATH}/TargetApp.ipa" || panic 1 "dump.py error"
+		PYTHONIOENCODING=utf-8 ${MONKEYDEV_PATH}/bin/dump.py ${MONKEYDEV_TARGET_APP} -o "${TARGET_APP_PUT_PATH}/TargetApp.ipa" || panic 1 "dump.py error"
 		TARGET_IPA_PATH=$(find "${TARGET_APP_PUT_PATH}" -type f | grep ".ipa$" | head -n 1)
 	fi
 
