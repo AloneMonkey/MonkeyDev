@@ -312,8 +312,8 @@ downloadGithubTarball "https://codeload.github.com/AloneMonkey/MonkeyDev-Xcode-T
 
 #下载frida-ios-dump
 echo "Downloading frida-ios-dump from Github..."
-downloadFile "https://raw.githubusercontent.com/AloneMonkey/frida-ios-dump/master/dump.py" "$MonkeyDevPath/bin/dump.py"
-downloadFile "https://raw.githubusercontent.com/AloneMonkey/frida-ios-dump/master/dump.js" "$MonkeyDevPath/bin/dump.js"
+downloadFile "https://raw.githubusercontent.com/AloneMonkey/frida-ios-dump/3.x/dump.py" "$MonkeyDevPath/bin/dump.py"
+downloadFile "https://raw.githubusercontent.com/AloneMonkey/frida-ios-dump/3.x/dump.js" "$MonkeyDevPath/bin/dump.js"
 
 chmod +x "$MonkeyDevPath/bin/dump.py"
 
