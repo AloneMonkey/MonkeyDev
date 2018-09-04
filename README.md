@@ -10,7 +10,8 @@
   </p>
 
   <p align="center">
-     群已满100人，关注公众号，点击"加群讨论"
+     群已满100人，关注公众号，点击"加群讨论"<br>
+     tg group: <a href="https://t.me/joinchat/GzXWkkolHljFWcX3m5T-Pg">https://t.me/joinchat/GzXWkkolHljFWcX3m5T-Pg</a>
   </p>
 </p>
 
