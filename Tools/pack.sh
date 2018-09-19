@@ -67,7 +67,7 @@ function checkApp(){
 function pack(){
 	TARGET_INFO_PLIST=${SRCROOT}/${TARGET_NAME}/Info.plist
 	# environment
-	CURRENT_EXECUTABLE=$(/usr/libexec/PlistBuddy -c "Print CFBundleExecutable" ${TARGET_INFO_PLIST} 2>/dev/null)
+	CURRENT_EXECUTABLE=$(/usr/libexec/PlistBuddy -c "Print CFBundleExecutable" "${TARGET_INFO_PLIST}" 2>/dev/null)
 
 	# create tmp dir
 	rm -rf "${TEMP_PATH}" || true
@@ -93,7 +93,7 @@ function pack(){
 
 	if [[ ! ${TARGET_APP_PATH} ]] && [[ ${TARGET_IPA_PATH} ]]; then
 		unzip -oqq "${TARGET_IPA_PATH}" -d "${TEMP_PATH}"
-		cp -rf ${TEMP_PATH}/Payload/*.app ${TARGET_APP_PUT_PATH}
+		cp -rf "${TEMP_PATH}/Payload/"*.app "${TARGET_APP_PUT_PATH}"
 	fi
 
 	#remove origin .app
@@ -112,14 +112,14 @@ function pack(){
 	cp -rf "${COPY_APP_PATH}/" "${BUILD_APP_PATH}/"
 
 	# get target info
-	ORIGIN_BUNDLE_ID=$(/usr/libexec/PlistBuddy -c "Print CFBundleIdentifier"  ${COPY_APP_PATH}/Info.plist 2>/dev/null)
-	TARGET_EXECUTABLE=$(/usr/libexec/PlistBuddy -c "Print CFBundleExecutable"  ${COPY_APP_PATH}/Info.plist 2>/dev/null)
+	ORIGIN_BUNDLE_ID=$(/usr/libexec/PlistBuddy -c "Print CFBundleIdentifier"  "${COPY_APP_PATH}/Info.plist" 2>/dev/null)
+	TARGET_EXECUTABLE=$(/usr/libexec/PlistBuddy -c "Print CFBundleExecutable"  "${COPY_APP_PATH}/Info.plist" 2>/dev/null)
 
 	if [[ ${CURRENT_EXECUTABLE} != ${TARGET_EXECUTABLE} ]]; then
-		cp -rf ${COPY_APP_PATH}/Info.plist ${TARGET_INFO_PLIST}
+		cp -rf "${COPY_APP_PATH}/Info.plist" "${TARGET_INFO_PLIST}"
 	fi
 
-	TARGET_DISPLAY_NAME=$(/usr/libexec/PlistBuddy -c "Print CFBundleDisplayName" ${TARGET_INFO_PLIST} 2>/dev/null)
+	TARGET_DISPLAY_NAME=$(/usr/libexec/PlistBuddy -c "Print CFBundleDisplayName" "${TARGET_INFO_PLIST}" 2>/dev/null)
 
 	# copy default framewrok
 	TARGET_APP_FRAMEWORKS_PATH="${BUILD_APP_PATH}/Frameworks/"
@@ -164,7 +164,7 @@ function pack(){
 
 	# Update Info.plist for Target App
 	if [[ "${TARGET_DISPLAY_NAME}" != "" ]]; then
-		/usr/libexec/PlistBuddy -c "Set :CFBundleName ${TARGET_DISPLAY_NAME}" ${TARGET_INFO_PLIST}
+		/usr/libexec/PlistBuddy -c "Set :CFBundleName ${TARGET_DISPLAY_NAME}" "${TARGET_INFO_PLIST}"
 		for file in `ls "${BUILD_APP_PATH}"`;
 		do
 			extension="${file#*.}"
@@ -180,16 +180,16 @@ function pack(){
 	fi
 
 	if [[ ${MONKEYDEV_DEFAULT_BUNDLEID} = NO ]];then 
-		/usr/libexec/PlistBuddy -c "Set :CFBundleIdentifier ${PRODUCT_BUNDLE_IDENTIFIER}" ${TARGET_INFO_PLIST}
+		/usr/libexec/PlistBuddy -c "Set :CFBundleIdentifier ${PRODUCT_BUNDLE_IDENTIFIER}" "${TARGET_INFO_PLIST}"
 	else
-		/usr/libexec/PlistBuddy -c "Set :CFBundleIdentifier ${ORIGIN_BUNDLE_ID}" ${TARGET_INFO_PLIST}
+		/usr/libexec/PlistBuddy -c "Set :CFBundleIdentifier ${ORIGIN_BUNDLE_ID}" "${TARGET_INFO_PLIST}"
 	fi
 
-	/usr/libexec/PlistBuddy -c "Delete :CFBundleIconFiles" ${TARGET_INFO_PLIST}
-	/usr/libexec/PlistBuddy -c "Add :CFBundleIconFiles array" ${TARGET_INFO_PLIST}
-	/usr/libexec/PlistBuddy -c "Add :CFBundleIconFiles: string ${TARGET_NAME}/icon.png" ${TARGET_INFO_PLIST}
+	/usr/libexec/PlistBuddy -c "Delete :CFBundleIconFiles" "${TARGET_INFO_PLIST}"
+	/usr/libexec/PlistBuddy -c "Add :CFBundleIconFiles array" "${TARGET_INFO_PLIST}"
+	/usr/libexec/PlistBuddy -c "Add :CFBundleIconFiles: string ${TARGET_NAME}/icon.png" "${TARGET_INFO_PLIST}"
 
-	cp -rf ${TARGET_INFO_PLIST} ${BUILD_APP_PATH}/Info.plist
+	cp -rf "${TARGET_INFO_PLIST}" "${BUILD_APP_PATH}/Info.plist"
 
 	#cocoapods
 	if [[ -f "${SRCROOT}/Pods/Target Support Files/Pods-""${TARGET_NAME}""Dylib/Pods-""${TARGET_NAME}""Dylib-frameworks.sh" ]]; then
