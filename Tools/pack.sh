@@ -96,6 +96,8 @@ function pack(){
 		cp -rf "${TEMP_PATH}/Payload/"*.app "${TARGET_APP_PUT_PATH}"
 	fi
 
+	mv "${BUILD_APP_PATH}/embedded.mobileprovision" "${BUILD_APP_PATH}"/..
+
 	#remove origin .app
 	rm -rf "${BUILD_APP_PATH}" || true
 	mkdir -p "${BUILD_APP_PATH}" || true
@@ -110,6 +112,8 @@ function pack(){
 
 	checkApp "${COPY_APP_PATH}"
 	cp -rf "${COPY_APP_PATH}/" "${BUILD_APP_PATH}/"
+
+	mv "${BUILD_APP_PATH}/../embedded.mobileprovision" "${BUILD_APP_PATH}"
 
 	# get target info
 	ORIGIN_BUNDLE_ID=$(/usr/libexec/PlistBuddy -c "Print CFBundleIdentifier"  "${COPY_APP_PATH}/Info.plist" 2>/dev/null)
