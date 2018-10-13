@@ -108,10 +108,12 @@ function pack(){
 
 	if [[ "${TARGET_APP_PATH}" = "" ]]; then
 		COPY_APP_PATH=${DEMOTARGET_APP_PATH}
+		cp -rf "${COPY_APP_PATH}/" "${BUILD_APP_PATH}/"
+		checkApp "${BUILD_APP_PATH}"
+	else
+		checkApp "${COPY_APP_PATH}"
+		cp -rf "${COPY_APP_PATH}/" "${BUILD_APP_PATH}/"
 	fi
-
-	checkApp "${COPY_APP_PATH}"
-	cp -rf "${COPY_APP_PATH}/" "${BUILD_APP_PATH}/"
 
 	mv "${BUILD_APP_PATH}/../embedded.mobileprovision" "${BUILD_APP_PATH}"
 
