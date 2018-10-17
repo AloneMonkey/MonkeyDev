@@ -170,7 +170,6 @@ function pack(){
 
 	# Update Info.plist for Target App
 	if [[ "${TARGET_DISPLAY_NAME}" != "" ]]; then
-		/usr/libexec/PlistBuddy -c "Set :CFBundleName ${TARGET_DISPLAY_NAME}" "${TARGET_INFO_PLIST}"
 		for file in `ls "${BUILD_APP_PATH}"`;
 		do
 			extension="${file#*.}"
@@ -178,7 +177,6 @@ function pack(){
 				if [[ "${extension}" == "lproj" ]]; then
 					if [[ -f "${BUILD_APP_PATH}/${file}/InfoPlist.strings" ]];then
 						/usr/libexec/PlistBuddy -c "Set :CFBundleDisplayName ${TARGET_DISPLAY_NAME}" "${BUILD_APP_PATH}/${file}/InfoPlist.strings"
-						/usr/libexec/PlistBuddy -c "Set :CFBundleName ${TARGET_DISPLAY_NAME}" "${BUILD_APP_PATH}/${file}/InfoPlist.strings"
 					fi
 		    	fi
 			fi
