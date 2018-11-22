@@ -1,20 +1,5 @@
 # MonkeyDev
 
-<p align="center">
-  <p align="center"></p>
-  <p align="center"></p>
-  <p align="center"></p>
-
-  <p align="center">
-    <img with="220px" height="220px" src="http://7xtdl4.com1.z0.glb.clouddn.com/script_1500695705204.png" alt="qrcode">
-  </p>
-
-  <p align="center">
-     群已满100人，关注公众号，点击"加群讨论"<br>
-     tg group: <a href="https://t.me/monkeydev">https://t.me/monkeydev</a>
-  </p>
-</p>
-
 A modified version of iOSOpenDev
 
 * easy to install
