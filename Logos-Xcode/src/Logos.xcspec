@@ -1,0 +1,15 @@
+/* 
+* Logos.xcspec: Xcode file type for Logos
+*
+**/
+
+(
+	{
+		Type = FileType;
+		Identifier = sourcecode.logos;
+		BasedOn = sourcecode;
+		Name = "Logos file";
+		Extensions = ( xm );
+		Language = "xcode.lang.logos";
+	}
+)

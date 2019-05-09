@@ -1,0 +1,37 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+	<key>Xcode.SourceCodeLanguage.Logos</key>
+	<dict>
+		<key>languageSpecification</key>
+		<string>xcode.lang.logos</string>
+		<key>fileDataType</key>
+		<array>
+			<dict>
+				<key>identifier</key>
+				<string>com.apple.xcode.logos-source</string>
+			</dict>
+		</array>
+		<key>id</key>
+		<string>Xcode.SourceCodeLanguage.Logos</string>
+		<key>point</key>
+		<string>Xcode.SourceCodeLanguage</string>
+		<key>languageName</key>
+		<string>Logos</string>
+		<key>version</key>
+		<string>1.0</string>
+		<key>documentationAbbreviation</key>
+		<string>logos</string>				
+		<key>conformsTo</key>
+		<array>
+			<dict>
+				<key>identifier</key>
+				<string>Xcode.SourceCodeLanguage.Generic</string>
+			</dict>
+		</array>
+		<key>name</key>
+		<string>Logos Language</string>
+	</dict>
+</dict>
+</plist>
