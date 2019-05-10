@@ -78,8 +78,8 @@ function pack(){
 	cp -rf "${CREATE_IPA}" "${PROJECT_DIR}"/LatestBuild/
 
 	# deal ipa or app
-	TARGET_APP_PATH=$(find "${SRCROOT}/${TARGET_NAME}" -type d | grep ".app$" | head -n 1)
-	TARGET_IPA_PATH=$(find "${SRCROOT}/${TARGET_NAME}" -type f | grep ".ipa$" | head -n 1)
+	TARGET_APP_PATH=$(find "${SRCROOT}/${TARGET_NAME}" -type d | grep "\.app$" | head -n 1)
+	TARGET_IPA_PATH=$(find "${SRCROOT}/${TARGET_NAME}" -type f | grep "\.ipa$" | head -n 1)
 
 	if [[ ${TARGET_APP_PATH} ]]; then
 		cp -rf "${TARGET_APP_PATH}" "${TARGET_APP_PUT_PATH}"
@@ -88,7 +88,7 @@ function pack(){
 	if [[ ! ${TARGET_APP_PATH} ]] && [[ ! ${TARGET_IPA_PATH} ]] && [[ ${MONKEYDEV_TARGET_APP} != "Optional" ]]; then
 		echo "pulling decrypted ipa from jailbreak device......."
 		PYTHONIOENCODING=utf-8 ${MONKEYDEV_PATH}/bin/dump.py ${MONKEYDEV_TARGET_APP} -o "${TARGET_APP_PUT_PATH}/TargetApp.ipa" || panic 1 "dump.py error"
-		TARGET_IPA_PATH=$(find "${TARGET_APP_PUT_PATH}" -type f | grep ".ipa$" | head -n 1)
+		TARGET_IPA_PATH=$(find "${TARGET_APP_PUT_PATH}" -type f | grep "\.ipa$" | head -n 1)
 	fi
 
 	if [[ ! ${TARGET_APP_PATH} ]] && [[ ${TARGET_IPA_PATH} ]]; then
@@ -100,11 +100,16 @@ function pack(){
 		mv "${BUILD_APP_PATH}/embedded.mobileprovision" "${BUILD_APP_PATH}"/..
 	fi
 
-	#remove origin .app
-	rm -rf "${BUILD_APP_PATH}" || true
-	mkdir -p "${BUILD_APP_PATH}" || true
+	TARGET_APP_PATH=$(find "${TARGET_APP_PUT_PATH}" -type d | grep "\.app$" | head -n 1)
 
-	TARGET_APP_PATH=$(find "${TARGET_APP_PUT_PATH}" -type d | grep ".app$" | head -n 1)
+	if [[ -f "${TARGET_APP_PUT_PATH}"/.current_put_app ]]; then
+		if [[ $(cat ${TARGET_APP_PUT_PATH}/.current_put_app) !=  "${TARGET_APP_PATH}" ]]; then
+			rm -rf "${BUILD_APP_PATH}" || true
+		 	mkdir -p "${BUILD_APP_PATH}" || true
+		 	rm -rf "${TARGET_APP_PUT_PATH}"/.current_put_app
+			echo "${TARGET_APP_PATH}" >> "${TARGET_APP_PUT_PATH}"/.current_put_app
+		fi
+	fi
 
 	COPY_APP_PATH=${TARGET_APP_PATH}
 

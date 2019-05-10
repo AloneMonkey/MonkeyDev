@@ -849,7 +849,7 @@ function xcodeBuildPhase() # no args
 								runFuncOnDevice "respring" "$MonkeyDevDeviceIP" "$MonkeyDevDevicePort" 
 							else
 								echo "killall -9 $MonkeyDevkillProcessOnInstall"
-								runFuncOnDevice "killall -9 $MonkeyDevkillProcessOnInstall" "$MonkeyDevDeviceIP" "$MonkeyDevDevicePort"
+								runFuncOnDevice "killall -9 $MonkeyDevkillProcessOnInstall  || echo skip" "$MonkeyDevDeviceIP" "$MonkeyDevDevicePort"
 							fi
 						fi
 
