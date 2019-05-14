@@ -739,25 +739,25 @@ function xcodeBuildPhase_Logos() # no args
 		pathToMMI="$specialDir/${specialFile%.*}.mmi"
 
 		# Replace '#import' with '//#import'
-		mod1Err=$((sed -e 's/#import/\/\/#import/' "$pathToXMI" > "$tempPathToMMI") 2>&1) || \
+		mod1Err=$((sed -e 's/#import/\/\/#import/g' "$pathToXMI" > "$tempPathToMMI") 2>&1) || \
 					panic $? "Replacing '#import' with '//#import' failed: $mod1Err"
 
-		
+		# Preprocessing
 		logosStdErr=$((g++ -E -CC -P -x objective-c "$tempPathToMMI"> "$pathToMMI") 2>&1) || \
 					panic $? "Failed Preprocessing .xmi: $logosStdErr"
 
 		# Delete Temp File
 		rm "$tempPathToMMI"
 
-		# Replace '//#import' with '#import'
-		mod2Err=$((sed -i -e 's/\/\/#import/#import/' "$pathToMMI") 2>&1) || \
+		# Replace '//#import' with '#import' (using perl bc sed creates a backup file)
+		mod2Err=$((perl -pi -e 's/\/\/#import/#import/g' "$pathToMMI") 2>&1) || \
 					panic $? "Replacing '//#import' with '#import' failed: $mod2Err"
-		
 
 		Processor "$logosProcessor" "$pathToMMI"
-		
+
 		# Delete .MMI File
 		rm "$pathToMMI"
+
 	else
 		Processor "$logosProcessor" "$PROJECT_DIR"
 	fi
