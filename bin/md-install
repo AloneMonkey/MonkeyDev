@@ -295,6 +295,18 @@ function writeDictToSpecification(){ #args: filePath, content
 	/usr/libexec/PlistBuddy -x -c "merge $tempfile 0" "$filePath" > /dev/null
 }
 
+# 安裝Logos語法高亮
+function installXcode10LogosSupports(){
+
+	echo "install Xcode10 Logos Supports..."
+	chmod +x $MonkeyDevPath/Logos-Xcode/src/xclangspec_generator.py
+	python $MonkeyDevPath/Logos-Xcode/src/xclangspec_generator.py
+	chmod +x $MonkeyDevPath/Logos-Xcode/src/install.sh
+	sudo sh -x $MonkeyDevPath/Logos-Xcode/src/install.sh
+
+}
+
+
 # start it
 # 创建/opt/MonkeyDev
 mkdir -p "$MonkeyDevPath" || \
@@ -373,5 +385,7 @@ if [[ $hasProductTypeForCommandLineTool != "true" ]]; then
 	toolDict=`readXcodeSpecificationById "$productTypesForMacOSXPath" "com.apple.product-type.tool"`
 	writeDictToSpecification "$specificationFile" "$toolDict"
 fi
+
+installXcode10LogosSupports
 
 exit 0

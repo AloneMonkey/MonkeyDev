@@ -16,6 +16,8 @@ export DefaultDeviceIP="localhost"
 #默认端口号
 export DefaultDevicePort="22"
 
+
+
 export userName="${SUDO_USER-$USER}"
 export userGroup=`id -g $userName`
 export userHome=`eval echo ~$userName`
@@ -652,6 +654,19 @@ function Processor()
 	if [[ $currentDirectory =~ "Build/Products" ]] || [[ $currentDirectory =~ "Build/Intermediates" ]] || [[ $currentDirectory =~ "Index/DataStore" ]] || [[ $currentDirectory =~ "/LatestBuild/" ]]; then
 		return
 	fi
+
+	if [[ -f "$currentDirectory" ]] || [[ "${currentDirectory#*.}" == "mmi" ]]; then
+
+		specialDir="$(dirname "${currentDirectory}")"
+		specialFile="$(basename "${currentDirectory}")"
+
+		# used for .xmi files
+		echo "Logos Processor: $specialFile -> ${specialFile%.*}.mm..."
+	  	logosStdErr=$(("$logosProcessor" "$currentDirectory" > "${currentDirectory%.*}.mm") 2>&1) || \
+			panic $? "Failed Logos Processor: $logosStdErr"
+
+		return
+	fi
 	
 	for file in `ls "$currentDirectory"`;
     do
@@ -708,7 +723,48 @@ function xcodeBuildPhase_Logos() # no args
 
 	# for each *.xm project file, use Logos Processor to generate *.mm file
 
-	Processor "$logosProcessor" "$PROJECT_DIR"
+
+	if [[ "$MonkeyDevUseXMI" == "YES" ]]; then
+
+		# Search for the .xmi file
+		pathToXMI=$(find "$PROJECT_DIR" -type f -name "*.xmi" | head -n 1)
+		if [[ "$pathToXMI" == "" ]]; then
+			panic 1 "MonkeyDevUseXMI Setting is enabled, but no .xmi file found."
+		fi
+
+		#Preprocess .xmi and output to .mmi
+		specialDir="$(dirname "${pathToXMI}")"
+		specialFile="$(basename "${pathToXMI}")"
+		tempPathToMMI="$specialDir/${specialFile%.*}.mmi.temp"
+		pathToMMI="$specialDir/${specialFile%.*}.mmi"
+
+		# Replace '#import' with '//#import'
+		mod1Err=$((sed -e 's/#import/\/\/#import/g' "$pathToXMI" > "$tempPathToMMI") 2>&1) || \
+					panic $? "Replacing '#import' with '//#import' failed: $mod1Err"
+
+		# Preprocessing
+		logosStdErr=$((g++ -E -CC -P -x objective-c "$tempPathToMMI"> "$pathToMMI") 2>&1) || \
+					panic $? "Failed Preprocessing .xmi: $logosStdErr"
+
+		# Delete Temp File
+		rm "$tempPathToMMI"
+
+		# Replace '//#import' with '#import' (using perl bc sed creates a backup file)
+		mod2Err=$((perl -pi -e 's/\/\/#import/#import/g' "$pathToMMI") 2>&1) || \
+					panic $? "Replacing '//#import' with '#import' failed: $mod2Err"
+
+		Processor "$logosProcessor" "$pathToMMI"
+
+		# Delete .MMI File
+		rm "$pathToMMI"
+
+	else
+		Processor "$logosProcessor" "$PROJECT_DIR"
+	fi
+
+
+
+	
 
 	echo "Note: If any *.xm or *.x file generated above by the Logos Processor (${projectXmFiles[@]}) is not being compiled below, then you must add it to the Xcode project to be compiled."
 
@@ -849,7 +905,7 @@ function xcodeBuildPhase() # no args
 								runFuncOnDevice "respring" "$MonkeyDevDeviceIP" "$MonkeyDevDevicePort" 
 							else
 								echo "killall -9 $MonkeyDevkillProcessOnInstall"
-								runFuncOnDevice "killall -9 $MonkeyDevkillProcessOnInstall  || echo skip" "$MonkeyDevDeviceIP" "$MonkeyDevDevicePort"
+								runFuncOnDevice "killall -9 $MonkeyDevkillProcessOnInstall || echo skip" "$MonkeyDevDeviceIP" "$MonkeyDevDevicePort"
 							fi
 						fi
 
