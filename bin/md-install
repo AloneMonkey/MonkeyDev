@@ -31,6 +31,12 @@ touch "$tempDirsFile"
 #把LANG变量从当前环境中删除
 unset LANG
 
+old_xcode_resource_path="/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/Library/Xcode/Specifications/Resources"
+new_xcode_resource_path="/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/Library/Xcode/PrivatePlugIns/IDEOSXSupportCore.ideplugin/Contents/Resources"
+if [[ ! -d $old_xcode_resource_path ]]; then
+sudo ln -s $new_xcode_resource_path $old_xcode_resource_path
+fi
+
 #出错退出
 function cleanup()
 {
