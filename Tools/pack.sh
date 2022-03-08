@@ -150,7 +150,8 @@ function pack(){
 			rm -rf "${TARGET_APP_FRAMEWORKS_PATH}/libsubstrate.dylib"
 		fi
 		if isRelease; then
-			rm -rf "${TARGET_APP_FRAMEWORKS_PATH}"/RevealServer.framework
+            rm -rf "${TARGET_APP_FRAMEWORKS_PATH}"/RevealServer.framework
+            rm -rf "${TARGET_APP_FRAMEWORKS_PATH}"/LookinServer.framework
 			rm -rf "${TARGET_APP_FRAMEWORKS_PATH}"/libcycript*
 		fi
 	fi
