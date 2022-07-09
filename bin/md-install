@@ -287,12 +287,16 @@ function readXcodeSpecificationById(){ #args: filePath, id
 
 #往spec文件写入内容
 function writeDictToSpecification(){ #args: filePath, content
+	# echo $1,$2
 	local filePath="$1"
 	local content="$2"
 	tempfile=`getTempDir`/dictfile
+	# echo $content
 	echo "$content" >> $tempfile
-	/usr/libexec/PlistBuddy -x -c 'add 0 dict' "$filePath" > /dev/null
+	# /usr/libexec/PlistBuddy -x -c 'add 0 dict' "$filePath" > /dev/null
+	# cat $1
 	/usr/libexec/PlistBuddy -x -c "merge $tempfile 0" "$filePath" > /dev/null
+	# cat $1
 }
 
 # start it
@@ -311,10 +315,11 @@ downloadGithubTarball "https://codeload.github.com/AloneMonkey/MonkeyDev/tar.gz/
 downloadGithubTarball "https://codeload.github.com/AloneMonkey/MonkeyDev-Xcode-Templates/tar.gz/$branch" "$MonkeyDevPath/templates" "Xcode templates"
 
 #下载frida-ios-dump
-echo "Downloading frida-ios-dump from Github..."
-downloadFile "https://raw.githubusercontent.com/AloneMonkey/frida-ios-dump/3.x/dump.py" "$MonkeyDevPath/bin/dump.py"
-downloadFile "https://raw.githubusercontent.com/AloneMonkey/frida-ios-dump/3.x/dump.js" "$MonkeyDevPath/bin/dump.js"
-
+echo "Moving frida-ios-dump from Resources..."
+# downloadFile "https://raw.githubusercontent.com/AloneMonkey/frida-ios-dump/3.x/dump.py" "$MonkeyDevPath/bin/dump.py"
+# downloadFile "https://raw.githubusercontent.com/AloneMonkey/frida-ios-dump/3.x/dump.js" "$MonkeyDevPath/bin/dump.js"
+cp Resource/dump.js $MonkeyDevPath/bin/dump.js
+cp Resource/dump.py $MonkeyDevPath/bin/dump.py
 chmod +x "$MonkeyDevPath/bin/dump.py"
 
 #创建符号链接
@@ -347,17 +352,18 @@ addToFileIfMissing "$userBashProfileFile" "^(export)? *PATH=.*(\\\$MonkeyDevPath
 iosSdkPlatformPath=`getSdkProperty iphoneos PlatformPath`
 macosSdkPlatformPath=`getSdkProperty macosx PlatformPath`
 
-specificationFile=$(cd $iosSdkPlatformPath/../../.. && pwd)/PlugIns/IDEiOSSupportCore.ideplugin/Contents/Resources/Embedded-Device.xcspec
+specificationFile=$(cd $iosSdkPlatformPath/../../.. && pwd)/PlugIns/XCBSpecifications.ideplugin/Contents/Resources/Embedded-Device.xcspec
 
 requireFile "$specificationFile" false
 
-#backup
+# backup
 requireBackup "$specificationFile"
 
 hasPackageTypeForCommandLineTool=`doesFileContain "$specificationFile" 'com.apple.package-type.mach-o-executable'`
 hasProductTypeForCommandLineTool=`doesFileContain "$specificationFile" 'com.apple.product-type.tool'`
 
-macosxSDKSpecificationsPath=$macosSdkPlatformPath/Developer/Library/Xcode/Specifications
+macosxSDKSpecificationsPath="$(cd $macosSdkPlatformPath/../../.. && pwd)/PlugIns/XCBSpecifications.ideplugin/Contents/Resources"
+# echo $macosxSDKSpecificationsPath
 packageTypesForMacOSXPath="$macosxSDKSpecificationsPath/MacOSX Package Types.xcspec"
 productTypesForMacOSXPath="$macosxSDKSpecificationsPath/MacOSX Product Types.xcspec"
 
