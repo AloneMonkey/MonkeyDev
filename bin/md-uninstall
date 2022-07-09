@@ -119,7 +119,7 @@ fi
 
 iosSdkPlatformPath=`getSdkProperty iphoneos PlatformPath`
 
-specificationFile=$(cd $iosSdkPlatformPath/../../.. && pwd)/PlugIns/IDEiOSSupportCore.ideplugin/Contents/Resources/Embedded-Device.xcspec
+specificationFile=$(cd $iosSdkPlatformPath/../../.. && pwd)/PlugIns/XCBSpecifications.ideplugin/Contents/Resources/Embedded-Device.xcspec
 
 #还原文件
 restoreFile "$specificationFile"
