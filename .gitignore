@@ -1,1 +1,19 @@
 .DS_Store
+/Examples/
+/docs/
+/Tools/build-class-dump-arm64.sh
+/Tools/build-monkeyparser-arm64.sh
+
+.monkeydev/
+
+/Headers/
+
+# Local input archives and build/editor caches; keep the bundled Demo tracked.
+*.ipa
+/build/
+/DerivedData/
+xcuserdata/
+*.xcuserstate
+__pycache__/
+*.pyc
+*.pyo

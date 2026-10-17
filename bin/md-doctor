@@ -1,0 +1,68 @@
+#!/bin/bash
+# Read-only diagnostics; never changes Xcode, certificates, or runtime settings.
+set -uo pipefail
+root="$(cd "$(dirname "$0")/.." && pwd)"
+failures=0
+fail() { echo "ERROR: $*"; failures=$((failures + 1)); }
+
+echo "MonkeyDev: $root"
+[[ "$(uname -m)" == arm64 ]] || fail "Use a native Apple Silicon (arm64) shell."
+xcodebuild -version || fail "Select a full Xcode installation with xcode-select."
+xcrun --sdk iphoneos --show-sdk-version || fail "The selected Xcode has no usable iPhoneOS SDK."
+for tool in monkeyparser class-dump; do
+    if [[ ! -f "$root/bin/$tool" ]] || [[ "$(/usr/bin/lipo -archs "$root/bin/$tool" 2>/dev/null)" != arm64 ]]; then
+        fail "$tool must be a thin native arm64 executable."
+    elif [[ ! -x "$root/bin/$tool" ]]; then
+        fail "$tool is not executable: $root/bin/$tool"
+    fi
+done
+if [[ -d "$root/templates" ]]; then
+    for template in Base MonkeyApp MonkeyAppLibrary; do
+        file="$root/templates/$template.xctemplate/TemplateInfo.plist"
+        /usr/bin/plutil -lint "$file" >/dev/null 2>&1 || fail "Invalid template plist: $template"
+        value="$(/usr/libexec/PlistBuddy -c 'Print :Project:SharedSettings:ENABLE_USER_SCRIPT_SANDBOXING' "$file" 2>/dev/null || true)"
+        [[ "$value" == NO ]] || fail "$template is incompatible (script sandboxing). Reinstall current templates."
+    done
+    for file in Trace/MDMethodTrace.h Trace/MDMethodTrace.mm Tools/LLDBTools.h Tools/LLDBTools.mm fishhook/fishhook.c fishhook/fishhook.h; do
+        [[ -f "$root/templates/MonkeyAppLibrary.xctemplate/$file" ]] || fail "Missing maintained template source: $file"
+    done
+else
+    echo "NOTE: Templates are downloaded separately by md-install."
+fi
+if [[ -f "$root/install-receipt.plist" ]]; then
+    /usr/bin/plutil -lint "$root/install-receipt.plist" >/dev/null || fail "Invalid install receipt."
+    if [[ -f "$root/install-files.sha256" ]]; then
+        if (cd "$root" && shasum -a 256 -c install-files.sha256 >/dev/null 2>&1); then
+            echo "Installed release file hashes: OK"
+        else
+            fail "Installed release files differ from the receipt. Run shasum -a 256 -c install-files.sha256 inside $root for details."
+        fi
+    else
+        fail "Missing installed release file hashes."
+    fi
+else
+    echo "NOTE: No install receipt; this is a checkout or an older installation."
+fi
+# sudo changes HOME; diagnostics must use the calling user's actual Theos/Reveal.
+userHome="$HOME"
+if [[ -n "${SUDO_USER:-}" ]]; then
+    userHome="$(/usr/bin/dscl . -read "/Users/$SUDO_USER" NFSHomeDirectory | sed 's/^NFSHomeDirectory: //')"
+fi
+if [[ -f "$userHome/theos/bin/logos.pl" && -f "$userHome/theos/vendor/include/logos/logos.h" ]]; then
+    if [[ -x "$userHome/theos/bin/logos.pl" ]]; then
+        echo "Theos/Logos: $userHome/theos"
+    else
+        fail "Logos processor is not executable: $userHome/theos/bin/logos.pl"
+    fi
+else
+    echo "NOTE: Install Theos as your normal user into ~/theos before building Logos sources."
+fi
+reveal="${MONKEYDEV_REVEAL_SDK:-$userHome/Library/Application Support/Reveal/RevealServer/RevealServer.xcframework}"
+if [[ -f "$reveal/Info.plist" ]]; then
+    echo "Reveal SDK: $reveal (optional, enable MONKEYDEV_REVEAL=YES in Debug)"
+else
+    echo "NOTE: Reveal SDK not found; install it from Reveal if needed."
+fi
+echo "NOTE: Device signing needs a signing identity and matching provisioning profile."
+echo "NOTE: Cycript/Substrate are retired. Legacy templates outside MonkeyApp need separate validation."
+[[ "$failures" == 0 ]]

@@ -1,3 +1,5 @@
+#!/bin/bash
+
 MONKEYDEV_PATH="/opt/MonkeyDev"
 
 function panic() # args: exitCode, message...

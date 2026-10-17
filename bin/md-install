@@ -1,377 +1,357 @@
 #!/bin/bash
+# Stage and validate a complete release before replacing /opt/MonkeyDev.
+set -eo pipefail
 
-#set -e表示一旦脚本中有命令的返回值为非0，则脚本立即退出，后续命令不再执行;
-#set -o pipefail表示在管道连接的命令序列中，只要有任何一个命令返回非0值，则整个管道返回非0值，即使最后一个命令返回0.
-export setCmd="set -eo pipefail"
-$setCmd
+scriptVersion=3.0
+branch="${1:-${MONKEYDEV_REF:-master}}"
+templatesRef="${MONKEYDEV_TEMPLATES_REF:-917fff99e48e8ffbd9e116b61dae29b32fb0dcfa}"
+dumpRef=master
+# DESTDIR is for packaging/tests only; it never registers templates or edits profiles.
+destination="${MONKEYDEV_DESTDIR:-}"
+MonkeyDevPath="${destination}/opt/MonkeyDev"
+work=""
+previousMoved=0
+published=0
+finished=0
+profileTouched=0
+linkTouched=0
+lockHeld=0
 
-#导出环境变量
-export PATH=/opt/MonkeyDev/bin:/usr/local/bin:/usr/bin:/usr/sbin:/bin:/sbin:$PATH
+fail() { echo "ERROR: $*" >&2; exit 1; }
+validRef() { [[ "$1" =~ ^[A-Za-z0-9_./-]+$ && "$1" != -* && "$1" != *..* ]]; }
+[[ "$#" -le 1 ]] || fail "Usage: md-install [Git ref]"
+validRef "$branch" && validRef "$templatesRef" || fail "Invalid Git ref"
+if [[ -n "$destination" ]]; then
+    [[ "$destination" == /* && "$destination" != / ]] || fail "MONKEYDEV_DESTDIR must be an absolute staging directory other than /"
+    mkdir -p "$destination"
+    destination="$(cd "$destination" && pwd -P)"
+    MonkeyDevPath="$destination/opt/MonkeyDev"
+else
+    [[ "$EUID" == 0 ]] || fail "Run md-install with sudo."
+fi
+[[ "$(uname -m)" == arm64 ]] || fail "MonkeyDev requires a native Apple Silicon (arm64) shell."
+xcodebuild -version || fail "Select a full Xcode installation with xcode-select first."
+xcrun --sdk iphoneos --show-sdk-path >/dev/null || fail "The selected Xcode has no iPhoneOS SDK."
+[[ ! -L "$MonkeyDevPath" ]] || fail "Installation directory must not be a symlink: $MonkeyDevPath"
+[[ ! -e "$MonkeyDevPath" || -d "$MonkeyDevPath" ]] || fail "Installation path is not a directory"
 
-#脚本名称和版本
-export scriptName="${0##*/}"
-export scriptVer="2.0"
-
-#本地存储文件的目录
-export MonkeyDevPath="/opt/MonkeyDev"
-export backupFileExt=".MonkeyDev"
-
-#获取用户名、用户组、用户目录、和profile文件
-export userName="${SUDO_USER-$USER}"
-export userGroup=`id -g $userName`
-export userHome=`eval echo ~$userName`
-
-#用户可能存在的profile文件
-export bashProfileFiles=("$userHome/.zshrc" "$userHome/.bash_profile" "$userHome/.bashrc" "$userHome/.bash_login" "$userHome/.profile")
-
-#获取临时文件名
-export tempDirsFile="`mktemp -d -t $scriptName`/tempdirs"
-touch "$tempDirsFile"
-
-#把LANG变量从当前环境中删除
-unset LANG
-
-#出错退出
-function cleanup()
-{
-	local exitCode=$?
-	set +e
-	trap - $signals
-	removeTempData
-	exit $exitCode
+cleanup() {
+    local result=$?
+    trap - EXIT HUP INT TERM
+    set +e
+    local rollbackFailed=0
+    if [[ "$finished" != 1 ]]; then
+        if [[ "$profileTouched" == 1 ]]; then
+            if [[ -f "$work/profile.previous" ]]; then
+                cp -p "$work/profile.previous" "$profile" || rollbackFailed=1
+            else
+                rm -f "$profile" || rollbackFailed=1
+            fi
+        fi
+        if [[ "$linkTouched" == 1 ]]; then
+            rm -f "$templateLink" || rollbackFailed=1
+            if [[ -n "$previousLink" ]]; then ln -s "$previousLink" "$templateLink" || rollbackFailed=1; fi
+        fi
+        if [[ "$published" == 1 ]]; then rm -rf "$MonkeyDevPath" || rollbackFailed=1; fi
+        if [[ "$previousMoved" == 1 ]]; then
+            if [[ -e "$MonkeyDevPath" || -L "$MonkeyDevPath" ]] || ! mv "$work/previous" "$MonkeyDevPath"; then
+                rollbackFailed=1
+            fi
+        fi
+    fi
+    if [[ "$rollbackFailed" == 1 ]]; then
+        echo "ERROR: Automatic rollback was incomplete; recovery files and installer lock retained at $work and $lockDir" >&2
+        exit 1
+    fi
+    [[ -z "$work" ]] || rm -rf "$work"
+    if [[ "$lockHeld" == 1 ]]; then rm -f "$lockDir/pid"; rmdir "$lockDir"; fi
+    exit "$result"
 }
+trap cleanup EXIT
+trap 'exit 129' HUP
+trap 'exit 130' INT
+trap 'exit 143' TERM
 
-function panic()
-{
-	local exitCode=$1
-	set +e
-	shift
-	[[ "$@" == "" ]] || echo "$@" >&2
-	exit $exitCode
-}
-
-export signals="0 1 2 3 15"
-#当shell接收到signals指定的信号时，执行cleanup命令
-trap cleanup $signals
-
-function removeTempData()
-{
-	local tempDirs
-	if [[ -f "$tempDirsFile" ]]; then
-		tempDirs=(`cat "$tempDirsFile"`)
-		for td in "${tempDirs[@]}"; do
-			rm -rf "$td" || true
-		done
-		rm -rf "`dirname $tempDirsFile`" || true
-	fi
-}
-function getTempDir()
-{
-	$setCmd
-	local tempDir
-	tempDir=`mktemp -d -t $scriptName` || \
-		panic $? "Failed to create temporary directory"
-	echo "$tempDir" >> "$tempDirsFile" || \
-		panic $? "Failed to echo into $tempDirsFile"
-	echo "$tempDir"
-}
-
-function copyFile()
-{
-	cp -f "$1" "$2" || \
-		panic $? "Failed to copy file $1 to $2"
-}
-
-#备份原文件
-function requireBackup()
-{
-	[[ ! -f "$1" || -f "${1}${backupFileExt}" ]] || \
-		copyFile "$1" "${1}${backupFileExt}"
-}
-
-#获取SDK信息
-function getSdkProperty()
-{
-	$setCmd
-
-	local sdk="$1"
-	local propertyName="$2"
-
-	propertyValue=`xcodebuild -version -sdk $sdk $propertyName` || \
-		panic $? "Failed to get $sdk SDK property $propertyName"
-
-	[[ $propertyValue != "" ]] || \
-		panic 1 "Value of $sdk SDK property $propertyName cannot be empty"
-
-	# return #
-	echo "$propertyValue"
-}
-
-#下载文件
-function downloadFile() # args: sourceUrl, targetPath
-{
-	local sourceUrl="$1"
-	local targetPath="$2"
-	local curlPath
-
-	mkdir -p "${targetPath%/*}" || \
-		panic $? "Failed to make directory: ${targetPath%/*}"
-
-	curlPath=`which curl` || \
-		panic $? "Failed to get curl path"
-
-	"$curlPath" --output "$targetPath" "$sourceUrl" || \
-		panic $? "Failed to download $sourceUrl to $targetPath"
-}
-
-#解压文件
-function extractTar() # args: tarPath, outputPath
-{
-	local tarPath="$1"
-	local outputPath="$2"
-	
-	tar -C "$outputPath" -zxf "$tarPath" || \
-		panic $? "Failed to extract $tarPath to $outputPath"
-}
-
-#下载github文件
-function downloadGithubTarball() # args: url, outputDir, title
-{
-	$setcmd
-
-	local url="$1"
-	local outputDir="$2"
-	local title="$3"
-	local tempDirForTar
-	local tempDirForFiles
-	local untardDir
-	local tarFile="file.tar.gz"
-
-	echo "Downloading $title from Github..."
-
-	tempDirForTar=`getTempDir`
-	tempDirForFiles=`getTempDir`
-	
-	downloadFile "$url" "$tempDirForTar/$tarFile"
-	
-	extractTar "$tempDirForTar/$tarFile" "$tempDirForFiles"
-
-	untardDir=`find "$tempDirForFiles/"* -type d -depth 0` || \
-		panic $? "Failed to get untar'ed directory name of $tempDirForTar/$tarFile"
-
-	mkdir -p "$outputDir" || \
-		panic $? "Failed to make directory: $outputDir"
-
-	cp -fR "$untardDir/"* "$outputDir/"
-}
-
-#修改文件权限
-function changeMode()
-{
-	local mode="$1"
-	local target="$2"
-	local recursive="$3"
-	local options
-
-	[[ $recursive != "true" ]] || \
-		options="-R"
-
-	if [[ -e "$target" ]]; then
-		chmod $options "$mode" "$target" || \
-			panic $? "Failed to change mode to $mode on $target"
-	fi
-}
-
-#获取用户profile文件
-function determineUserBashProfileFile()
-{
-	$setCmd
-
-	local f
-	local filePath
-	
-	for f in "${bashProfileFiles[@]}"; do
-		if [[ -f "$f" ]]; then
-			filePath="$f"
-			echo "" >> "$f" || \
-				panic $? "Failed to echo into $f"
-			break
-		fi
-	done
-	
-	if [[ $filePath == "" ]]; then
-		filePath="$bashProfileFiles"
-
-		touch "$filePath" || \
-			panic $? "Failed to touch $filePath"
-			
-		chown "$userName:$userGroup" "$filePath" || \
-			panic $? "Failed to change owner-group of $filePath"
-		
-		changeMode 0600 "$filePath"
-	fi
-	
-	# return #
-	echo "$filePath"
-}
-
-#验证是否存在文件
-function requireFile() # args: filePath [, touchFileIfNotFound]
-{
-	local filePath="$1"
-	local touchFileIfNotFound="$2"
-	
-	if [[ ! -f "$filePath" ]]; then
-		if [[ $touchFileIfNotFound == "true" ]]; then
-
-			touch "$filePath" || \
-				panic $? "Failed to touch $filePath"
-				
-		else
-			panic 1 "File $filePath not found"
-		fi
-	fi
-}
-
-#增加内容到文件
-function addToFileIfMissing() # args: filePath, pattern, value
-{
-	local filePath="$1"
-	local pattern="$2"
-	local value="$3"
-	local doesContain
-
-	doesContain=`doesFileContain "$filePath" "$pattern"`
-	
-	[[ $doesContain == "true" ]] || \
-		echo "$value" >> "$filePath" || \
-			panic $? "Failed to echo into $filePath"	
-}
-
-#判断文件是否包含内容
-function doesFileContain() # args: filePath, pattern
-{
-	$setCmd
-	
-	local filePath="$1"
-	local pattern="$2"
-	local perlValue
-	local funcReturn
-	
-	perlValue=`perl -ne 'if (/'"$pattern"'/) { print "true"; exit; }' "$filePath"` || \
-		panic $? "Failed to perl"
-
-	if [[ $perlValue == "true" ]]; then
-		funcReturn="true"
-	else
-		funcReturn="false"
-	fi
-	
-	# return #
-	echo $funcReturn
-}
-
-#从spec读取内容
-function readXcodeSpecificationById(){ #args: filePath, id
-	local filePath="$1"
-	local id="$2"
-	content=`/usr/libexec/PlistBuddy -x -c Print "$filePath"` || \
-		panic $? "Failed to get $filePath content"
-	for (( i=0; i<=1; i++)); do
-		dict=`/usr/libexec/PlistBuddy -x -c "Print $i" "$filePath"`
-		if echo $dict | grep -qE "<string>$id</string>"; then
-			echo "$dict"
-		fi
-	done
-}
-
-#往spec文件写入内容
-function writeDictToSpecification(){ #args: filePath, content
-	local filePath="$1"
-	local content="$2"
-	tempfile=`getTempDir`/dictfile
-	echo "$content" >> $tempfile
-	/usr/libexec/PlistBuddy -x -c 'add 0 dict' "$filePath" > /dev/null
-	/usr/libexec/PlistBuddy -x -c "merge $tempfile 0" "$filePath" > /dev/null
-}
-
-# start it
-# 创建/opt/MonkeyDev
-mkdir -p "$MonkeyDevPath" || \
-	panic $? "Failed to make directory: $MonkeyDevPath"
-
-branch="master"
-
-if [[ "$1" ]]; then
-	branch="$1"
+parent="${MonkeyDevPath%/*}"
+mkdir -p "$parent"
+lockDir="$parent/.monkeydev-install.lock"
+mkdir "$lockDir" 2>/dev/null || fail "An installer lock exists: $lockDir. Check for another installation before removing a stale lock."
+lockHeld=1
+printf '%s\n' "$$" > "$lockDir/pid"
+work="$(mktemp -d "$parent/.monkeydev-install.XXXXXX")"
+candidate="$work/MonkeyDev"
+mkdir "$candidate"
+# Work only on a copy until validation and user integration are ready.
+if [[ -d "$MonkeyDevPath" ]]; then cp -pR "$MonkeyDevPath/." "$candidate/"; fi
+# Remove this installation's previous release files, preserving user additions.
+# The manifest is produced by our installer; no legacy migration is performed.
+if [[ -f "$candidate/install-files.sha256" ]]; then
+    while IFS= read -r entry || [[ -n "$entry" ]]; do
+        [[ "$entry" =~ ^[[:xdigit:]]{64}\ \ (.+)$ ]] || fail "Invalid installed release manifest"
+        relative="${BASH_REMATCH[1]}"
+        case "$relative" in
+            bin/*|Tools/*|Frameworks/*|MFrameworks/*|Librarys/*|Resource/*|include/*|templates/*|docs/*|README.md|LICENSE|SKILL.md) ;;
+            *) fail "Invalid release path: $relative" ;;
+        esac
+        case "/$relative/" in
+            *'/../'*|*'/./'*|*'//'*) fail "Invalid release path: $relative" ;;
+        esac
+        # Never let a path in the manifest escape through a user-created link.
+        directory="${relative%/*}"
+        if [[ "$directory" != "$relative" ]]; then
+            while [[ "$directory" != . ]]; do
+                [[ ! -L "$candidate/$directory" ]] || fail "Release path traverses a symlink: $relative"
+                [[ "$directory" == */* ]] || break
+                directory="${directory%/*}"
+            done
+        fi
+        [[ ! -d "$candidate/$relative" || -L "$candidate/$relative" ]] || fail "Release file became a directory: $relative"
+        rm -f "$candidate/$relative"
+        directory="${candidate}/${relative%/*}"
+        if [[ "${relative%/*}" != "$relative" ]]; then
+            while [[ "$directory" != "$candidate" ]]; do
+                rmdir "$directory" 2>/dev/null || break
+                directory="${directory%/*}"
+            done
+        fi
+    done < "$candidate/install-files.sha256"
 fi
 
-#下载一些基础文件和模板文件
-downloadGithubTarball "https://codeload.github.com/AloneMonkey/MonkeyDev/tar.gz/$branch" "$MonkeyDevPath" "MonkeyDev base"
-downloadGithubTarball "https://codeload.github.com/AloneMonkey/MonkeyDev-Xcode-Templates/tar.gz/$branch" "$MonkeyDevPath/templates" "Xcode templates"
+fetch() { /usr/bin/curl --fail --location --silent --show-error --retry 3 --connect-timeout 20 --max-time 180 --output "$2" "$1"; }
+archive() {
+    local url="$1" out="$2" name="$3"
+    mkdir "$work/$name"
+    fetch "$url" "$work/$name.tar.gz" || fail "Download failed: $name"
+    tar -xzf "$work/$name.tar.gz" -C "$work/$name" || fail "Invalid archive: $name"
+    local roots=("$work/$name/"*)
+    [[ "${#roots[@]}" == 1 && -d "${roots[0]}" ]] || fail "Expected one archive root: $name"
+    mv "${roots[0]}" "$out"
+}
 
-#下载frida-ios-dump
-echo "Downloading frida-ios-dump from Github..."
-downloadFile "https://raw.githubusercontent.com/AloneMonkey/frida-ios-dump/3.x/dump.py" "$MonkeyDevPath/bin/dump.py"
-downloadFile "https://raw.githubusercontent.com/AloneMonkey/frida-ios-dump/3.x/dump.js" "$MonkeyDevPath/bin/dump.js"
+sourceCommit=unknown
+sourceDirty=unknown
+if [[ -n "${MONKEYDEV_SOURCE_DIR:-}" ]]; then
+    base="$(cd "$MONKEYDEV_SOURCE_DIR" && pwd -P)"
+    [[ "$base" != "$(cd "$candidate" && pwd -P)" && "$base" != "$MonkeyDevPath" ]] || fail "Source checkout must differ from the installation directory"
+    sourceMode=local
+    sourceCommit="$(git -C "$base" rev-parse HEAD 2>/dev/null || echo unknown)"
+    if [[ "$sourceCommit" != unknown ]]; then
+        sourceDirty=NO
+        [[ -z "$(git -C "$base" status --porcelain --untracked-files=normal)" ]] || sourceDirty=YES
+    fi
+else
+    sourceMode=download
+    base="$work/base"
+    archive "https://codeload.github.com/AloneMonkey/MonkeyDev/tar.gz/$branch" "$base" base-download
+fi
+# Validate the release itself before overlaying a previous installation. Every
+# maintained template/build input must come from this version, never the backup.
+requiredFiles=(
+    bin/md bin/md-install bin/md-update bin/md-uninstall bin/md-doctor
+    bin/monkeyparser bin/class-dump bin/createIPA.command
+    Tools/pack.sh Tools/mpack.sh Tools/reveal.sh
+    Resource/TargetApp.app/Info.plist Resource/TargetApp.app/TargetApp
+)
+for item in "${requiredFiles[@]}"; do
+    [[ -f "$base/$item" && ! -L "$base/$item" ]] || fail "Missing required release file: $item"
+done
+for item in bin Tools Frameworks MFrameworks Librarys Resource include; do
+    [[ -d "$base/$item" && ! -L "$base/$item" ]] || fail "Incomplete MonkeyDev source: $item"
+    [[ ! -L "$candidate/$item" ]] || fail "Managed directory must not be a symlink: $item"
+    mkdir -p "$candidate/$item"
+    if [[ "$item" == Tools ]]; then
+        # Native build inputs belong to development, not the installed runtime.
+        for tool in "$base/Tools/"*; do
+            case "${tool##*/}" in
+                native|templates|build-class-dump-arm64.sh|build-monkeyparser-arm64.sh) continue ;;
+            esac
+            cp -pR "$tool" "$candidate/Tools/"
+        done
+    else
+        cp -pR "$base/$item/." "$candidate/$item/"
+    fi
+done
+for item in README.md LICENSE SKILL.md; do
+    [[ ! -e "$base/$item" ]] || cp -pR "$base/$item" "$candidate/"
+done
+# Templates are replaced as a whole so removed templates do not survive updates.
+# A complete local checkout supports offline release tests.
+rm -rf "$candidate/templates"
+if [[ -n "${MONKEYDEV_TEMPLATES_DIR:-}" ]]; then
+    [[ -d "$MONKEYDEV_TEMPLATES_DIR/Base.xctemplate" ]] || fail "Invalid MONKEYDEV_TEMPLATES_DIR"
+    templateSource="$MONKEYDEV_TEMPLATES_DIR"
+    templatesMode=local
+else
+    templateSource="$work/templates-release"
+    archive "https://codeload.github.com/AloneMonkey/MonkeyDev-Xcode-Templates/tar.gz/$templatesRef" "$templateSource" templates-download
+    templatesMode=download
+fi
+mkdir "$candidate/templates"
+for template in "$templateSource/"*.xctemplate; do cp -pR "$template" "$candidate/templates/"; done
+# Templates are complete release inputs from their own repository. Validate
+# before publishing; never patch them or modify Xcode.app during installation.
+for template in Base MonkeyApp MonkeyAppLibrary; do
+    file="$candidate/templates/$template.xctemplate/TemplateInfo.plist"
+    /usr/bin/plutil -lint "$file" >/dev/null || fail "Invalid template plist: $template"
+    for pair in ARCHS:arm64 ENABLE_USER_SCRIPT_SANDBOXING:NO; do
+        key="${pair%%:*}"
+        expected="${pair#*:}"
+        value="$(/usr/libexec/PlistBuddy -c "Print :Project:SharedSettings:$key" "$file" 2>/dev/null || true)"
+        [[ "$value" == "$expected" ]] || fail "Incompatible template: $template ($key must be $expected). Update MonkeyDev-Xcode-Templates."
+    done
+done
+for item in ___PACKAGENAMEASIDENTIFIER___.m Logos/___PACKAGENAMEASIDENTIFIER___.xm \
+    Logos/___PACKAGENAMEASIDENTIFIER___.mm fishhook/fishhook.c fishhook/fishhook.h \
+    Tools/LLDBTools.h Tools/LLDBTools.mm Trace/MDMethodTrace.h Trace/MDMethodTrace.mm; do
+    file="$candidate/templates/MonkeyAppLibrary.xctemplate/$item"
+    [[ -f "$file" && ! -L "$file" ]] || fail "Missing template source: $item"
+done
+for tool in monkeyparser class-dump; do
+    [[ "$(/usr/bin/lipo -archs "$candidate/bin/$tool" 2>/dev/null)" == arm64 ]] || fail "$tool must be a thin native arm64 executable"
+done
+chmod 755 "$candidate/bin/monkeyparser" "$candidate/bin/class-dump"
+MONKEYDEV_CLASS_DUMP=NO MONKEYDEV_RESTORE_SYMBOL=NO "$candidate/bin/monkeyparser" verify \
+    -t "$candidate/Resource/TargetApp.app" -o "$work/native-verify" > "$work/parser-check.log" 2>&1 || fail "Native monkeyparser/Demo verification failed"
+"$candidate/bin/class-dump" "$candidate/Resource/TargetApp.app/TargetApp" \
+    > "$work/class-dump-check.h" 2> "$work/class-dump-check.log" || fail "Native class-dump/Demo check failed"
+for script in md md-install md-update md-doctor md-uninstall; do
+    /bin/bash -n "$candidate/bin/$script" || fail "Invalid shell script: $script"
+    chmod 755 "$candidate/bin/$script"
+done
+/bin/bash -n "$candidate/Tools/pack.sh"
+/bin/bash -n "$candidate/Tools/reveal.sh"
 
-chmod +x "$MonkeyDevPath/bin/dump.py"
+if [[ -n "${MONKEYDEV_DUMP_DIR:-}" ]]; then
+    for name in dump.py dump.js; do
+        [[ -s "$MONKEYDEV_DUMP_DIR/$name" ]] || fail "Missing dump source: $name"
+        cp "$MONKEYDEV_DUMP_DIR/$name" "$candidate/bin/$name"
+    done
+else
+    for name in dump.py dump.js; do
+        fetch "https://raw.githubusercontent.com/AloneMonkey/frida-ios-dump/$dumpRef/$name" "$candidate/bin/$name" || fail "Download failed: $name"
+    done
+fi
+chmod 755 "$candidate/bin/dump.py" "$candidate/bin/monkeyparser" "$candidate/bin/class-dump"
+receipt="$candidate/install-receipt.plist"
+rm -f "$receipt" "$candidate/install-files.sha256"
+/usr/bin/plutil -create xml1 "$receipt"
+receiptString() { /usr/bin/plutil -insert "$1" -string "$2" "$receipt"; }
+receiptString installerVersion "$scriptVersion"
+receiptString installedAtUTC "$(date -u '+%Y-%m-%dT%H:%M:%SZ')"
+receiptString baseRef "$branch"
+receiptString sourceMode "$sourceMode"
+receiptString sourceCommit "$sourceCommit"
+receiptString sourceDirty "$sourceDirty"
+receiptString templatesMode "$templatesMode"
+receiptString templatesRef "$templatesRef"
+receiptString dumpRef "$dumpRef"
+receiptString xcodeVersion "$(xcodebuild -version)"
+receiptString fileHashes install-files.sha256
+(
+    cd "$candidate"
+    # Hash release files, not unrelated user additions preserved by an update.
+    hashRoots=(bin Tools Frameworks MFrameworks Librarys Resource include templates)
+    for item in README.md LICENSE SKILL.md; do
+        [[ ! -e "$item" ]] || hashRoots+=("$item")
+    done
+    find "${hashRoots[@]}" -type f -print0 > "$work/hash-inputs"
+    while IFS= read -r -d '' file; do
+        if [[ -f "$base/$file" || "$file" == templates/* || "$file" == bin/dump.py || "$file" == bin/dump.js ]]; then
+            shasum -a 256 "$file"
+        fi
+    done < "$work/hash-inputs" > install-files.sha256
+)
 
-#创建符号链接
-echo "Creating symlink to Xcode templates..."
-
-#$userHome/Library/Developer/Xcode/Templates/MonkeyDev linkto $MonkeyDevPath/templates
-userDevDir="$userHome/Library/Developer"
-userTemplatesDir="$userDevDir/Xcode/Templates"
-
-if [[ ! -d "$userTemplatesDir" ]]; then
-	mkdir -p "$userTemplatesDir" || \
-		panic $? "Failed to make directory: $userTemplatesDir"
-		
-	chown -R "$userName:$userGroup" "$userDevDir" || \
-		panic $? "Failed to change ownership-group of $userDevDir"
+# Prepare user integration without changing it. Packaging mode touches no home.
+if [[ -z "$destination" ]]; then
+    installUser="${SUDO_USER:-${USER:-root}}"
+    if [[ "$installUser" == root ]]; then installUser="$(stat -f '%Su' /dev/console)"; fi
+    [[ -n "$installUser" && "$installUser" != root && "$installUser" != loginwindow ]] || fail "Run sudo from your normal login account"
+    installGroup="$(id -g "$installUser")"
+    userHome="$(/usr/bin/dscl . -read "/Users/$installUser" NFSHomeDirectory | sed 's/^NFSHomeDirectory: //')"
+    [[ "$userHome" == /* && -d "$userHome" ]] || fail "Cannot determine login user's home"
+    templateDir="$userHome/Library/Developer/Xcode/Templates"
+    templateLink="$templateDir/MonkeyDev"
+    [[ ! -e "$templateLink" || -L "$templateLink" ]] || fail "Template path is not a symlink; preserve it and move it aside manually: $templateLink"
+    previousLink="$(readlink "$templateLink" 2>/dev/null || true)"
+    [[ ! -L "$templateLink" || "$previousLink" == /opt/MonkeyDev/templates ]] || fail "Template path is not our registration; preserve it and move it aside manually: $templateLink"
+    profile="$userHome/.zshrc"
+    for name in .zshrc .bash_profile .bashrc .bash_login .profile; do
+        if [[ -f "$userHome/$name" ]]; then profile="$userHome/$name"; break; fi
+    done
+    [[ ! -L "$profile" ]] || fail "Shell profile is a symlink; no changes made. Configure a regular shell profile before installing: $profile"
+    if [[ -f "$profile" ]]; then
+        cp -pL "$profile" "$work/profile.previous"
+        cp -pL "$profile" "$work/profile.next"
+    else
+        [[ ! -e "$profile" && ! -L "$profile" ]] || fail "Invalid shell profile: $profile"
+        touch "$work/profile.next"
+    fi
+    profileExports=""
+    if ! /usr/bin/grep -Eq '^(export[[:space:]]+)?MonkeyDevPath=' "$work/profile.next"; then
+        profileExports+=$'export MonkeyDevPath=/opt/MonkeyDev\n'
+    fi
+    if ! /usr/bin/grep -Eq '^(export[[:space:]]+)?MonkeyDevDeviceIP=' "$work/profile.next"; then
+        profileExports+=$'export MonkeyDevDeviceIP=\n'
+    fi
+    if ! /usr/bin/grep -Eq '^export PATH=.*(\$MonkeyDevPath/bin|/opt/MonkeyDev/bin)' "$work/profile.next"; then
+        profileExports+=$'export PATH=/opt/MonkeyDev/bin:$PATH\n'
+    fi
+    # Record only text we actually append. Pre-existing user settings must never
+    # be guessed at or removed by the uninstaller. Keep ownership across updates.
+    if ! /usr/bin/plutil -extract profileEdits json -o "$work/profile-edits.json" "$MonkeyDevPath/install-receipt.plist" 2>/dev/null; then
+        printf '[]' > "$work/profile-edits.json"
+    fi
+    if [[ -n "$profileExports" ]]; then
+        printf '\n# >>> MonkeyDev >>>\n%s# <<< MonkeyDev <<<\n' "$profileExports" > "$work/profile.append"
+        cat "$work/profile.append" >> "$work/profile.next"
+        /usr/bin/perl - "$work/profile-edits.json" "$profile" "$work/profile.append" > "$work/profile-edits.next.json" <<'PERL'
+use strict;
+use warnings;
+use JSON::PP qw(decode_json encode_json);
+my ($records, $path, $append) = @ARGV;
+open my $input, '<', $records or die "read profile records: $!";
+my $edits = decode_json(do { local $/; <$input> }); close $input;
+die "invalid profile records" unless ref($edits) eq 'ARRAY';
+open my $block, '<', $append or die "read profile additions: $!";
+my $text = do { local $/; <$block> }; close $block;
+push @$edits, {path => $path, text => $text}
+    unless grep { $_->{path} eq $path && $_->{text} eq $text } @$edits;
+print encode_json($edits);
+PERL
+        mv "$work/profile-edits.next.json" "$work/profile-edits.json"
+    fi
+    /usr/bin/plutil -insert profileEdits -json "$(cat "$work/profile-edits.json")" "$receipt"
 fi
 
-ln -fhs "$MonkeyDevPath/templates" "$userTemplatesDir/MonkeyDev"
-
-#修改用户profile文件
-echo "Modifying Bash personal initialization file..."
-
-userBashProfileFile=`determineUserBashProfileFile`
-
-addToFileIfMissing "$userBashProfileFile" "^(export)? *MonkeyDevPath=.*" "export MonkeyDevPath=$MonkeyDevPath"
-addToFileIfMissing "$userBashProfileFile" "^(export)? *MonkeyDevDeviceIP=.*" "export MonkeyDevDeviceIP="
-addToFileIfMissing "$userBashProfileFile" "^(export)? *PATH=.*(\\\$MonkeyDevPath\\/bin|${MonkeyDevPath//\//\\/}\\/bin).*" "export PATH=$MonkeyDevPath/bin:\$PATH"
-
-#支持iphoneos command line tools
-iosSdkPlatformPath=`getSdkProperty iphoneos PlatformPath`
-macosSdkPlatformPath=`getSdkProperty macosx PlatformPath`
-
-specificationFile=$(cd $iosSdkPlatformPath/../../.. && pwd)/PlugIns/IDEiOSSupportCore.ideplugin/Contents/Resources/Embedded-Device.xcspec
-
-requireFile "$specificationFile" false
-
-#backup
-requireBackup "$specificationFile"
-
-hasPackageTypeForCommandLineTool=`doesFileContain "$specificationFile" 'com.apple.package-type.mach-o-executable'`
-hasProductTypeForCommandLineTool=`doesFileContain "$specificationFile" 'com.apple.product-type.tool'`
-
-macosxSDKSpecificationsPath=$macosSdkPlatformPath/Developer/Library/Xcode/Specifications
-packageTypesForMacOSXPath="$macosxSDKSpecificationsPath/MacOSX Package Types.xcspec"
-productTypesForMacOSXPath="$macosxSDKSpecificationsPath/MacOSX Product Types.xcspec"
-
-requireFile "$packageTypesForMacOSXPath" false
-requireFile "$productTypesForMacOSXPath" false
-
-if [[ $hasPackageTypeForCommandLineTool != "true" ]]; then
-	machoDict=`readXcodeSpecificationById "$packageTypesForMacOSXPath" "com.apple.package-type.mach-o-executable"`
-	writeDictToSpecification "$specificationFile" "$machoDict"
+# Rename on the same filesystem; cleanup restores the previous directory if
+# publication or user integration fails. Xcode.app and existing projects are not modified.
+if [[ -d "$MonkeyDevPath" ]]; then mv "$MonkeyDevPath" "$work/previous"; previousMoved=1; fi
+mv "$candidate" "$MonkeyDevPath"
+published=1
+if [[ -z "$destination" ]]; then
+    makeUserDir() {
+        [[ ! -d "$1" ]] || return 0
+        makeUserDir "${1%/*}"
+        mkdir "$1"
+        chown "$installUser:$installGroup" "$1"
+    }
+    makeUserDir "$templateDir"
+    linkTouched=1
+    rm -f "$templateLink"
+    ln -s /opt/MonkeyDev/templates "$templateLink"
+    chown -h "$installUser:$installGroup" "$templateLink"
+    if [[ ! -f "$profile" ]] || ! cmp -s "$work/profile.next" "$profile"; then
+        profileTouched=1
+        if [[ ! -f "$profile" ]]; then touch "$profile"; chmod 600 "$profile"; chown "$installUser:$installGroup" "$profile"; fi
+        cat "$work/profile.next" > "$profile"
+    fi
 fi
-
-if [[ $hasProductTypeForCommandLineTool != "true" ]]; then
-	toolDict=`readXcodeSpecificationById "$productTypesForMacOSXPath" "com.apple.product-type.tool"`
-	writeDictToSpecification "$specificationFile" "$toolDict"
+finished=1
+echo "Installed MonkeyDev at $MonkeyDevPath (templates $templatesRef)."
+if [[ -n "$destination" ]]; then
+    echo "Packaging mode: no template registration or shell profile changes."
+else
+    echo "Restart Xcode; run /opt/MonkeyDev/bin/md-doctor for diagnostics."
 fi
-
-exit 0
+echo "Theos uses ~/theos. Legacy iOS Command-line Tool and other templates need separate validation."

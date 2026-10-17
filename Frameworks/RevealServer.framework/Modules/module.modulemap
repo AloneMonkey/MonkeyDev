@@ -1,6 +1,0 @@
-framework module RevealServer {
-  umbrella header "RevealServer.h"
-
-  export *
-  module * { export * }
-}

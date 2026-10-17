@@ -1,127 +1,122 @@
 #!/bin/bash
+# Remove the dedicated installation directory and recorded user integration.
+set -eo pipefail
 
-export setCmd="set -eo pipefail"
-$setCmd
-
-export PATH=/opt/MonkeyDev/bin:/usr/local/bin:/usr/bin:/usr/sbin:/bin:/sbin:$PATH
-
-export scriptName="${0##*/}"
-export scriptVer="2.0"
-
-export MonkeyDevPath="/opt/MonkeyDev"
-export backupFileExt=".MonkeyDev"
-
-export userName="${SUDO_USER-$USER}"
-export userGroup=`id -g $userName`
-export userHome=`eval echo ~$userName`
-export bashProfileFiles=("$userHome/.zshrc" "$userHome/.bash_profile" "$userHome/.bashrc" "$userHome/.bash_login" "$userHome/.profile")
-
-export tempDirsFile="`mktemp -d -t $scriptName`/tempdirs"
-touch "$tempDirsFile"
-
-unset LANG
-
-function cleanup()
-{
-	local exitCode=$?
-	set +e
-	trap - $signals
-	removeTempData
-	exit $exitCode
+fail() { echo "ERROR: $*" >&2; exit 1; }
+[[ "$#" == 0 ]] || fail "Usage: md-uninstall"
+destination="${MONKEYDEV_DESTDIR:-}"
+if [[ -n "$destination" ]]; then
+    [[ "$destination" == /* && "$destination" != / && -d "$destination" ]] || fail "Invalid MONKEYDEV_DESTDIR"
+    destination="$(cd "$destination" && pwd -P)"
+else
+    [[ "$EUID" == 0 ]] || fail "Run md-uninstall with sudo."
+fi
+MonkeyDevPath="${destination}/opt/MonkeyDev"
+[[ ! -L "$MonkeyDevPath" ]] || fail "Installation directory must not be a symlink"
+if [[ ! -e "$MonkeyDevPath" ]]; then
+    echo "No MonkeyDev installation found at $MonkeyDevPath"
+    exit 0
+fi
+[[ -d "$MonkeyDevPath" ]] || fail "Installation path is not a directory"
+lockDir="${MonkeyDevPath%/*}/.monkeydev-install.lock"
+mkdir "$lockDir" 2>/dev/null || fail "An installation/uninstallation lock exists: $lockDir"
+work=""
+cleanup() {
+    local result=$?
+    trap - EXIT HUP INT TERM
+    [[ -z "$work" ]] || rm -rf "$work"
+    rm -f "$lockDir/pid"
+    rmdir "$lockDir"
+    exit "$result"
 }
-function panic()
-{
-	local exitCode=$1
-	set +e
-	shift
-	[[ "$@" == "" ]] || echo "$@" >&2
-	exit $exitCode
+trap cleanup EXIT
+trap 'exit 129' HUP
+trap 'exit 130' INT
+trap 'exit 143' TERM
+printf '%s\n' "$$" > "$lockDir/pid"
+work="$(mktemp -d "${MonkeyDevPath%/*}/.monkeydev-uninstall.XXXXXX")"
+receipt="$MonkeyDevPath/install-receipt.plist"
+[[ -f "$receipt" && ! -L "$receipt" ]] || fail "Installation receipt missing; no files removed"
+/usr/bin/plutil -lint "$receipt" >/dev/null || fail "Invalid installation receipt; no files removed"
+[[ "$(/usr/libexec/PlistBuddy -c 'Print :fileHashes' "$receipt")" == install-files.sha256 ]] || fail "Unrecognized installation receipt"
+
+# No user-home changes in packaging mode. Never guess which existing profile
+# lines belong to us: only remove exact text recorded by the installer.
+removeLink=NO
+if [[ -z "$destination" ]]; then
+    installUser="${SUDO_USER:-${USER:-root}}"
+    if [[ "$installUser" == root ]]; then installUser="$(stat -f '%Su' /dev/console)"; fi
+    [[ -n "$installUser" && "$installUser" != root && "$installUser" != loginwindow ]] || fail "Run sudo from your normal login account"
+    userHome="$(/usr/bin/dscl . -read "/Users/$installUser" NFSHomeDirectory | sed 's/^NFSHomeDirectory: //')"
+    [[ "$userHome" == /* && -d "$userHome" ]] || fail "Cannot determine login user's home"
+    templateLink="$userHome/Library/Developer/Xcode/Templates/MonkeyDev"
+    if [[ -e "$templateLink" || -L "$templateLink" ]]; then
+        [[ -L "$templateLink" && "$(readlink "$templateLink")" == /opt/MonkeyDev/templates ]] || fail "Template path is not our registration; no files removed: $templateLink"
+        removeLink=YES
+    fi
+    if /usr/bin/plutil -extract profileEdits json -o "$work/profile-edits.json" "$receipt" 2>/dev/null; then
+        /usr/bin/perl - "$work/profile-edits.json" "$userHome" "$work" <<'PERL'
+use strict;
+use warnings;
+use JSON::PP qw(decode_json);
+my ($json, $home, $work) = @ARGV;
+open my $fh, '<', $json or die "read profile records: $!";
+my $edits = decode_json(do { local $/; <$fh> });
+close $fh;
+die "invalid profile records" unless ref($edits) eq 'ARRAY';
+my %allowed = map { ("$home/$_", 1) } qw(.zshrc .bash_profile .bashrc .bash_login .profile);
+my %owned_lines = map { ($_, 1) } ('export MonkeyDevPath=/opt/MonkeyDev',
+    'export MonkeyDevDeviceIP=', 'export PATH=/opt/MonkeyDev/bin:$PATH');
+my %profiles;
+for my $edit (@$edits) {
+    die "invalid profile ownership record" unless ref($edit) eq 'HASH'
+        && defined($edit->{path}) && defined($edit->{text}) && $allowed{$edit->{path}}
+        && $edit->{text} =~ /\A\n# >>> MonkeyDev >>>\n.*\n# <<< MonkeyDev <<<\n\z/s;
+    my ($body) = $edit->{text} =~ /\A\n# >>> MonkeyDev >>>\n(.+)# <<< MonkeyDev <<<\n\z/s;
+    die "unrecognized shell additions" unless defined($body)
+        && !grep { !$owned_lines{$_} } split /\n/, $body;
+    push @{$profiles{$edit->{path}}}, $edit->{text};
 }
-export signals="0 1 2 3 15"
-trap cleanup $signals
-
-function removeTempData()
-{
-	local tempDirs
-	if [[ -f "$tempDirsFile" ]]; then
-		tempDirs=(`cat "$tempDirsFile"`)
-		for td in "${tempDirs[@]}"; do
-			rm -rf "$td" || true
-		done
-		rm -rf "`dirname $tempDirsFile`" || true
-	fi
+open my $plan, '>', "$work/profile-plan" or die "create profile plan: $!";
+my $index = 0;
+for my $path (sort keys %profiles) {
+    die "shell profile is a symlink; review manually: $path" if -l $path;
+    next unless -e $path;
+    die "shell profile is not a regular file: $path" unless -f $path;
+    open my $input, '<', $path or die "read $path: $!";
+    my $original = do { local $/; <$input> }; close $input;
+    my $text = $original;
+    my $missing = 0;
+    for my $block (@{$profiles{$path}}) {
+        my $at = index($text, $block);
+        if ($at < 0) { $missing = 1; next; }
+        die "duplicated managed shell block: $path" if index($text, $block, $at + length($block)) >= 0;
+        substr($text, $at, length($block), '');
+    }
+    die "managed shell block changed; review manually: $path" if $missing && index($text, '# >>> MonkeyDev >>>') >= 0;
+    next if $text eq $original;
+    my $next = "$work/profile-" . $index++;
+    open my $output, '>', $next or die "stage profile: $!";
+    print {$output} $text; close $output or die "write profile: $!";
+    print {$plan} "$path\0$next\0";
 }
-
-function copyFile()
-{
-	cp -f "$1" "$2" || \
-		panic $? "Failed to copy file $1 to $2"
-}
-
-#还原文件
-function restoreFile()
-{
-	local filePath="$1"
-	local backedUpFilePath="${filePath}${backupFileExt}"
-	
-	if [[ -f "$backedUpFilePath" ]]; then
-		copyFile "$backedUpFilePath" "$filePath"	
-		rm -f "$backedUpFilePath"
-	fi
-}
-
-#获取SDK信息
-function getSdkProperty()
-{
-	$setCmd
-
-	local sdk="$1"
-	local propertyName="$2"
-
-	propertyValue=`xcodebuild -version -sdk $sdk $propertyName` || \
-		panic $? "Failed to get $sdk SDK property $propertyName"
-
-	[[ $propertyValue != "" ]] || \
-		panic 1 "Value of $sdk SDK property $propertyName cannot be empty"
-
-	# return #
-	echo "$propertyValue"
-}
-
-echo "Uninstalling MonkeyDev base, Xcode templates and framework header files..."
-	
-#删除文件夹
-rm -rf "$MonkeyDevPath" || \
-	panic $? "Failed to remove directory: $MonkeyDevPath"
-
-#移除模块符号链接
-userDevDir="$userHome/Library/Developer"
-userTemplatesDir="$userDevDir/Xcode/Templates"
-symlinkPath="$userTemplatesDir/MonkeyDev"
-
-rm -f "$symlinkPath" || \
-	panic $? "Failed to remove file: $symlinkPath"
-		
-#移除profile环境变量
-for f in "${bashProfileFiles[@]}"; do
-	if [[ -f "$f" ]]; then
-		userBashProfileFile="$f"
-		break
-	fi
-done
-	
-if [[ $userBashProfileFile != "" ]]; then
-	sed -i "" "s/^export MonkeyDevPath=.*$//g" "$userBashProfileFile"
-	sed -i "" "s/^export MonkeyDevDeviceIP=.*$//g" "$userBashProfileFile"
-	sed -i "" "s/^export PATH=.*${MonkeyDevPath//\//\\/}\\/bin:.*$//g" "$userBashProfileFile"
-	sed -i "" "s/^export PATH=.*\$MonkeyDevPath\\/bin:.*$//g" "$userBashProfileFile"
+close $plan;
+PERL
+    else
+        echo "NOTE: No recorded profile additions; existing shell configuration will be left unchanged."
+    fi
 fi
 
-iosSdkPlatformPath=`getSdkProperty iphoneos PlatformPath`
-
-specificationFile=$(cd $iosSdkPlatformPath/../../.. && pwd)/PlugIns/IDEiOSSupportCore.ideplugin/Contents/Resources/Embedded-Device.xcspec
-
-#还原文件
-restoreFile "$specificationFile"
-
-exit 0
+# The checks above must finish before the first external mutation.
+if [[ -f "$work/profile-plan" ]]; then
+    while IFS= read -r -d '' profile && IFS= read -r -d '' next; do
+        [[ ! -L "$profile" ]] || fail "Shell profile changed into a symlink"
+        cat "$next" > "$profile"
+    done < "$work/profile-plan"
+fi
+if [[ "$removeLink" == YES ]]; then rm "$templateLink"; fi
+# This fixed, dedicated directory includes any user-added libraries. rm does
+# not follow symlinks inside it; no manifest paths are used for deletion.
+[[ -d "$MonkeyDevPath" && ! -L "$MonkeyDevPath" ]] || fail "Installation directory changed during uninstall"
+rm -rf "$MonkeyDevPath"
+echo "Uninstalled MonkeyDev."
