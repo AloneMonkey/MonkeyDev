@@ -467,8 +467,10 @@ function createDebianPackage() # args: sourceDir, packageName [, outputDir]
 	echo "2.0" > "$tempDir/debian-binary" || \
 		panic $? "Failed to create debian-binary file"
 	
-	ar -rc "$packageFile" "$tempDir/debian-binary" "$tempDir/control.tar.gz" "$tempDir/data.tar.gz" || \
+	# deb members are data, not Mach-O objects; disable Apple's symbol indexing.
+	ar -rcS "$tempDir/package.deb" "$tempDir/debian-binary" "$tempDir/control.tar.gz" "$tempDir/data.tar.gz" || \
 		panic $? "Failed to create Debian archive"
+	mv -f "$tempDir/package.deb" "$packageFile" || panic $? "Failed to save Debian archive"
 
 	echo "Done."
 }
@@ -485,7 +487,7 @@ function createTarForDebianPackage() # args: sourceDir, outputDir, tarName [, op
 	
 	pushd "$sourceDir" 1> /dev/null
 
-	tar -cLpz --disable-copyfile --exclude ".*" "$@" -f "$outputDir/$tarName.tar.gz" * || \
+	tar -cLpz --format=gnutar --disable-copyfile --uid 0 --gid 0 --uname root --gname wheel --exclude ".*" "$@" -f "$outputDir/$tarName.tar.gz" * || \
 		panic $? "Failed to create $tarName archive"
 
 	popd 1> /dev/null
@@ -743,12 +745,48 @@ function xcodeBuildPhase() # no args
 	
 	#目标文件路径
 	local packageInstallSource
+	# Tweak templates opt in; legacy templates keep their existing packaging flow.
+	if [[ -n "$MONKEYDEV_PACKAGE_SCHEME" ]]; then
+		local packageArch packagePrefix stage
+		case "$MONKEYDEV_PACKAGE_SCHEME" in
+			rootless) packageArch=iphoneos-arm64; packagePrefix=/var/jb ;;
+			rootful) packageArch=iphoneos-arm; packagePrefix="" ;;
+			*) panic 1 "Unsupported package scheme: $MONKEYDEV_PACKAGE_SCHEME" ;;
+		esac
+		local expectedInstallPath="$packagePrefix/Library/MobileSubstrate/DynamicLibraries"
+		if [[ "$PRODUCT_TYPE" == "com.apple.product-type.tool" ]]; then
+			expectedInstallPath="$packagePrefix/usr/bin"
+		fi
+		[[ "$INSTALL_PATH" == "$expectedInstallPath" ]] || \
+			panic 1 "INSTALL_PATH does not match $MONKEYDEV_PACKAGE_SCHEME"
+		requireFile "$packageDirectory/DEBIAN/control" false
+		[[ ! -e "$packageDirectory/var" && ! -L "$packageDirectory/var" ]] || \
+			panic 1 "Keep tweak Package resources unprefixed; the build adds the rootless prefix"
+		stage="$(getTempDir)/Package"
+		mkdir -p "$stage"
+		cp -R "$packageDirectory/." "$stage/"
+		if [[ "$MONKEYDEV_PACKAGE_SCHEME" == rootless ]]; then
+			mkdir -p "$stage/var/jb"
+			local item
+			for item in "$stage/"*; do
+				[[ "${item##*/}" == DEBIAN || "${item##*/}" == var ]] && continue
+				mv "$item" "$stage/var/jb/"
+			done
+		fi
+		/usr/bin/sed -E "s/^Architecture:.*$/Architecture: $packageArch/" \
+			"$stage/DEBIAN/control" > "$stage/DEBIAN/control.new"
+		mv "$stage/DEBIAN/control.new" "$stage/DEBIAN/control"
+		packageDirectory="$stage"
+		packageInstallPath="$packageDirectory$INSTALL_PATH"
+	fi
 	if [[ $SHALLOW_BUNDLE != "YES" ]]; then
 		packageInstallSource="$TARGET_BUILD_DIR/$EXECUTABLE_PATH"
 	else
 		packageInstallSource="$TARGET_BUILD_DIR/$EXECUTABLE_FOLDER_PATH"
 	fi
 
+	# New tweak deployments inherit SSH config; only legacy templates read profiles.
+	if [[ -z "$MONKEYDEV_PACKAGE_SCHEME" ]]; then
 	#如果编译设置里面MonkeyDevDeviceIP为空的话，就从用户的profile里面去拿，否则使用默认值
 	[[ $MonkeyDevDeviceIP != "" ]] || \
 		MonkeyDevDeviceIP=`getBashProfileEnvVarValue "MonkeyDevDeviceIP"`
@@ -761,6 +799,7 @@ function xcodeBuildPhase() # no args
 
 	[[ $MonkeyDevDevicePort != "" ]] || \
 		MonkeyDevDevicePort="$DefaultDevicePort"
+	fi
 
 	#验证必要文件的存在
 	requireFile "$builtExecutable" false
@@ -792,12 +831,16 @@ function xcodeBuildPhase() # no args
 	elif [[ "$PLATFORM_NAME" != "iphoneos" ]]; then
 		echo "Skipping signing (since platform is not iphoneos)"
 	else
-		signCode "$builtExecutable" "$EXPANDED_CODE_SIGN_IDENTITY"
+		if [[ -n "$MONKEYDEV_PACKAGE_SCHEME" ]]; then
+			signCode "$builtExecutable" ""
+		else
+			signCode "$builtExecutable" "$EXPANDED_CODE_SIGN_IDENTITY"
+		fi
 	fi
 
 	changeMode "$INSTALL_MODE_FLAG" "$builtExecutable"
 
-	if [[ "$MonkeyDevDevicePassword" != "" ]]; then
+	if [[ "$MonkeyDevDevicePassword" != "" && -z "$MONKEYDEV_PACKAGE_SCHEME" ]]; then
 		sshpassProcessor=`which sshpass` || \
 		panic $? "Failed to locate sshpass. Is sshpass installed? If not, brew install https://raw.githubusercontent.com/kadwanev/bigboybrew/master/Library/Formula/sshpass.rb"
 	fi
@@ -829,7 +872,9 @@ function xcodeBuildPhase() # no args
 		buildPackage "$packageDirectory" "$allPackagesDir" true
 		
 		#profile或者用户设置了build安装
-		if [[ "$CONFIGURATION" == "Release" && "$VALIDATE_PRODUCT" == "YES" ]] || [[ "$MonkeyDevInstallOnAnyBuild" == "YES" ]]; then
+		if [[ -n "$MONKEYDEV_PACKAGE_SCHEME" && "$MonkeyDevAuthentication" == "None" ]]; then
+			echo "Tweak package built; installation disabled (SSH Authentication: None)."
+		elif [[ "$CONFIGURATION" == "Release" && "$VALIDATE_PRODUCT" == "YES" ]] || [[ "$MonkeyDevInstallOnAnyBuild" == "YES" ]]; then
 		
 			if [[ "$DEPLOYMENT_POSTPROCESSING" == "NO" || "$MonkeyDevInstallOnAnyBuild" == "YES" ]]; then
 			
@@ -837,15 +882,22 @@ function xcodeBuildPhase() # no args
 				if [[ "$MonkeyDevInstallOnProfiling" == "YES"  || "$MonkeyDevInstallOnAnyBuild" == "YES" ]]; then
 				
 					# if MonkeyDevDeviceIP has a value, install package on device...
-					if [[ "$MonkeyDevDeviceIP" != "" ]]; then
+					if [[ "$MonkeyDevDeviceIP" != "" || -n "$MONKEYDEV_PACKAGE_SCHEME" ]]; then
 	
 						# get package file name #
-						packageFileName="`getPackageFileNameUsingControlFile \"$packageDirectory/DEBIAN/control\"`.deb"
+						packageFileName="$(getPackageFileNameUsingControlFile "$packageDirectory/DEBIAN/control").deb"
 							
 						# install package on device #					
-						managePackageOnDevice "install" "$allPackagesDir/$packageFileName" "$MonkeyDevDeviceIP" "$MonkeyDevDevicePort"
+						if [[ -n "$MONKEYDEV_PACKAGE_SCHEME" ]]; then
+							local deployScript="$(cd "$(dirname "${BASH_SOURCE[0]}")/../Tools" && pwd)/tweak-deploy.sh"
+							export MonkeyDevDeviceIP MonkeyDevDevicePort MonkeyDevDeviceUser MonkeyDevDeviceKey MonkeyDevDevicePassword MonkeyDevDevicePasswordFile MonkeyDevkillProcessOnInstall
+							export MonkeyDevConnectionType MonkeyDevDeviceUDID MonkeyDevAuthentication
+							/bin/bash "$deployScript" "$allPackagesDir/$packageFileName"
+						else
+							managePackageOnDevice "install" "$allPackagesDir/$packageFileName" "$MonkeyDevDeviceIP" "$MonkeyDevDevicePort"
+						fi
 						
-						if [[ "$MonkeyDevkillProcessOnInstall" != "" ]]; then
+						if [[ "$MonkeyDevkillProcessOnInstall" != "" && -z "$MONKEYDEV_PACKAGE_SCHEME" ]]; then
 							if [[ "$MonkeyDevkillProcessOnInstall" == "SpringBoard" ]]; then
 								echo "respring device..."
 								runFuncOnDevice "respring" "$MonkeyDevDeviceIP" "$MonkeyDevDevicePort" 

@@ -93,12 +93,48 @@ Reveal 使用用户本机 SDK，不再随 MonkeyDev 分发框架。先通过 Rev
 
 开启 **Reveal (Debug)** 后重新 Build/Run，允许 App 的本地网络访问，在 Reveal 选择运行中的 App；USB 连接已验证。查看层级时保持 App 继续运行，不停在断点上。Release 不接入 Reveal。
 
+## 越狱 Logos Tweak
+
+Logos Tweak 支持选择 rootless / rootful 包布局，使用设备上兼容 MobileSubstrate 接口的 Hook 框架（例如 ElleKit）。不需要随插件打包旧 Substrate。rootless 已在越狱真机验证，rootful 当前完成构建和包内容检查。
+
+CaptainHook Tweak 和 Command-line Tool 使用相同的 USB、认证和 deb 安装配置。CaptainHook 默认使用内部 Objective-C Runtime Hook，不链接 Substrate；仍需设备上的 tweak 加载器加载插件。将工程 `Package/Library/MobileSubstrate/DynamicLibraries/<项目名>.plist` 的 Filter 改为目标 App 的 Bundle ID。
+
+Command-line Tool 保留 C、C++、Foundation、Core Foundation 类型，使用 ldid 签名，默认不申请额外权限。rootless 安装到 `/var/jb/usr/bin`，rootful 安装到 `/usr/bin`；安装后通过设备 SSH 执行程序，不通过 Xcode Run 启动。
+
+创建向导默认使用 USB 连接和 rootless 布局，授权方式可选 `None`、`KEY`（默认，SSH 密钥免密）或 `PASSWORD`（输入设备账号、密码）。`None` 只生成 deb，不安装；`KEY` 和 `PASSWORD` 在 Build 后自动安装 tweak。免密模式沿用 SSH 配置；只有密码模式启用账号、密码输入，默认账号为 `mobile`，密码必填。向导填写的密码会保存在工程中，请勿提交或分享。
+
+USB 优先使用显式配置的 UDID，其次使用 Xcode 选择的设备，否则自动识别唯一连接的 USB 设备。IP 连接、SSH 别名和其他高级设置仍可在 target 的 Build Settings 中配置：
+
+| 设置 | 用途 |
+| --- | --- |
+| `MonkeyDevConnectionType` | `USB`：通过 inetcat 直连；`IP`：通过局域网直连；`SSH`：继承 SSH 配置别名 |
+| `MonkeyDevDeviceUDID` | 可选，手动指定 USB 目标设备；连接多台设备时可填写 |
+| `MonkeyDevDeviceIP` | IP 地址或 SSH 别名；USB 模式也可填写别名以复用账号和密钥配置 |
+| `MonkeyDevDevicePort` | 设备 SSH 端口；USB 默认 22，SSH 别名模式留空可继承配置 |
+| `MonkeyDevAuthentication` | `None`：只打包、不安装；`AUTO`：自动认证；`KEY`：公钥免密；`PASSWORD`：强制密码认证 |
+| `MonkeyDevDeviceUser` | SSH 用户，留空继承 `~/.ssh/config` |
+| `MonkeyDevDeviceKey` | 可选私钥路径，留空使用 SSH 配置或 ssh-agent |
+| `MonkeyDevDevicePasswordFile` | 可选本地密码文件（一行密码），用于密码登录或非 root 用户的 sudo 安装 |
+| `MonkeyDevInstallOnAnyBuild` | 设为 `YES` 后，Build 自动上传并安装 deb |
+| `MonkeyDevkillProcessOnInstall` | 安装后退出的目标进程名，默认留空，不自动重启 SpringBoard |
+
+USB 模式需要 `brew install libusbmuxd libimobiledevice`，无需启动 iproxy；密码认证需要 `brew install sshpass`。密码也可通过不提交 Git 的本地配置设置 `MonkeyDevDevicePassword`，或使用密码文件。密码文件与直接配置同时存在时，以密码文件为准。
+
+首次连接先在终端确认设备 SSH 主机身份。USB 模式使用 `monkeydev-usb-<UDID>` 作为主机身份别名；IP 模式使用目标主机身份；SSH 模式遵循用户已有配置。构建不会关闭主机密钥检查。SSH 免密登录与 sudo 权限独立：mobile 免密登录后，安装 deb 仍需要 sudo 密码或已有的免密 sudo 权限。
+
+首次 USB 连接可用下面的命令，将 `<UDID>` 和 `mobile` 替换为实际设备与账号；密钥可由 SSH 配置提供，也可通过 `-i` 指定：
+
+```bash
+ssh -o "ProxyCommand=inetcat -u <UDID> 22" -o "HostKeyAlias=monkeydev-usb-<UDID>" mobile@usb-iphone
+```
+
 ## 支持范围与迁移
 
 - 支持 MonkeyApp 的 thin arm64、未加密 iOS 真机输入；不支持 Intel 主机、模拟器、arm64e/PAC、Fat 或加密输入。arm64e 设备可以运行 arm64 App。
 - 打包副本会移除 App 扩展、Watch 和旧 Store 元数据；当前不覆盖扩展的独立签名与安装。原始 IPA/App 保留。
 - Cycript 和旧 Substrate 运行库已移除。CaptainHook/Logos internal 保留；Logos internal 不支持 `%hookf`。
-- macOS、越狱 tweak、旧 Command-line Tool、MonkeyPod/CocoaPods 等历史模板仍需单独迁移验证，不在当前支持范围内。
+- Logos Tweak、CaptainHook Tweak、iOS Command-line Tool 的 rootless arm64 已完成真机验证；rootful 仅完成构建和打包检查。
+- macOS、MonkeyPod/CocoaPods 等历史模板尚未迁移验证，不在当前支持范围内。
 - 模板更新影响新建项目；已有工程需单独迁移。增量构建的签名阶段必须每次执行。
 
 历史资料保留在 [Wiki](https://github.com/AloneMonkey/MonkeyDev/wiki) 和 [MonkeyDevSpecs](https://github.com/AloneMonkey/MonkeyDevSpecs)，其中旧依赖和安装步骤不代表当前适配状态。
