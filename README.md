@@ -93,6 +93,33 @@ Reveal 使用用户本机 SDK，不再随 MonkeyDev 分发框架。先通过 Rev
 
 开启 **Reveal (Debug)** 后重新 Build/Run，允许 App 的本地网络访问，在 Reveal 选择运行中的 App；USB 连接已验证。查看层级时保持 App 继续运行，不停在断点上。Release 不接入 Reveal。
 
+## MonkeyPod
+
+MonkeyPod 将 CaptainHook 插件做成可复用的 CocoaPods 库，由 MonkeyApp 的 Dylib target 引用，不负责独立重签名或设备安装。先安装 CocoaPods：
+
+```bash
+brew install cocoapods
+```
+
+用 **MonkeyDev → MonkeyPod** 创建工程。向导生成 Objective-C framework、公开头文件和同目录的 podspec，支持 iOS 15+ arm64。先用本地 Pod 验证，在 MonkeyApp 工程根目录创建 Podfile，例如：
+
+```ruby
+# 兼容当前 CocoaPods 尚未支持的 Xcode 27 工程字段，仅在本次进程中生效。
+require '/opt/MonkeyDev/Tools/cocoapods-compat'
+
+platform :ios, '15.0'
+target 'YourAppDylib' do
+  use_frameworks! :linkage => :dynamic
+  pod 'YourPlugin', :path => '../YourPlugin/YourPlugin'
+end
+```
+
+替换 target、Pod 名和路径；`:path` 指向 podspec 所在目录，不是 `.xcodeproj`。执行 `pod install` 后打开 `.xcworkspace`，通过 MonkeyApp 的 App scheme Build/Run。使用动态 framework，让插件 constructor 随加载执行，避免静态链接时只含 Hook 函数的文件被丢弃。
+
+默认示例对 `CustomViewController` 的实例方法 `getMyName` 返回 `MonkeyDevPod`，可用 MonkeyApp 内置 Demo 验证；实际使用时改成目标 App 的类、selector 和准确签名。CaptainHook 使用内部后端，不链接旧 Substrate。插件 framework 会由现有打包流程复制并签名。
+
+兼容模块转换脚本数组和 framework 复制目的地，生成的 Pods 工程使用 CocoaPods 支持的格式，不修改宿主工程版本或已安装的 gem。遇到旧解析器不支持的其他 `dstSubfolder` 复制目录时会报错停止，避免保存时丢失目录配置。当前新格式仍可能出现版本提示；遇到其他未知字段时先检查，不按本例推断任意第三方工程均兼容。发布 Pod 前需自行补齐实际仓库、作者、许可等元数据，默认示例地址不能用于发布。
+
 ## 越狱 Logos Tweak
 
 Logos Tweak 支持选择 rootless / rootful 包布局，使用设备上兼容 MobileSubstrate 接口的 Hook 框架（例如 ElleKit）。不需要随插件打包旧 Substrate。rootless 已在越狱真机验证，rootful 当前完成构建和包内容检查。
@@ -134,7 +161,8 @@ ssh -o "ProxyCommand=inetcat -u <UDID> 22" -o "HostKeyAlias=monkeydev-usb-<UDID>
 - 打包副本会移除 App 扩展、Watch 和旧 Store 元数据；当前不覆盖扩展的独立签名与安装。原始 IPA/App 保留。
 - Cycript 和旧 Substrate 运行库已移除。CaptainHook/Logos internal 保留；Logos internal 不支持 `%hookf`。
 - Logos Tweak、CaptainHook Tweak、iOS Command-line Tool 的 rootless arm64 已完成真机验证；rootful 仅完成构建和打包检查。
-- macOS、MonkeyPod/CocoaPods 等历史模板尚未迁移验证，不在当前支持范围内。
+- MonkeyPod 已完成本地动态 Pod 接入 MonkeyApp、签名安装及真机 Hook 验证；Pod 发布流程未验证。
+- macOS 模板尚未迁移验证，不在当前支持范围内。
 - 模板更新影响新建项目；已有工程需单独迁移。增量构建的签名阶段必须每次执行。
 
 历史资料保留在 [Wiki](https://github.com/AloneMonkey/MonkeyDev/wiki) 和 [MonkeyDevSpecs](https://github.com/AloneMonkey/MonkeyDevSpecs)，其中旧依赖和安装步骤不代表当前适配状态。

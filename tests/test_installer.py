@@ -71,8 +71,8 @@ class InstallerTests(unittest.TestCase):
         receipt = plistlib.loads((self.prefix / 'install-receipt.plist').read_bytes())
         self.assertEqual(receipt['sourceMode'], 'local')
         self.assertEqual(receipt['installerVersion'], '3.0')
-        self.assertEqual(receipt['templatesRef'], '31b8eb533df277acaa2194f0a664668f3c464aef')
-        for name in ['bin/monkeyparser', 'bin/class-dump', 'Tools/reveal.sh', 'Tools/tweak-deploy.sh',
+        self.assertEqual(receipt['templatesRef'], 'f811f23bf7512d5b5ba2fa52f54d1ecc8cbb78da')
+        for name in ['bin/monkeyparser', 'bin/class-dump', 'Tools/reveal.sh', 'Tools/tweak-deploy.sh', 'Tools/cocoapods-compat.rb',
                      'templates/MonkeyAppLibrary.xctemplate/Tools/LLDBTools.mm']:
             self.assertTrue((self.prefix / name).is_file(), name)
         checks = subprocess.run(['shasum', '-a', '256', '-c', 'install-files.sha256'], cwd=self.prefix, capture_output=True)
@@ -343,7 +343,7 @@ class InstallerTests(unittest.TestCase):
         result = self.run_install()
         self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
         before = self.fingerprint()
-        maintained = ['bin/md-uninstall', 'bin/createIPA.command', 'Tools/tweak-deploy.sh',
+        maintained = ['bin/md-uninstall', 'bin/createIPA.command', 'Tools/tweak-deploy.sh', 'Tools/cocoapods-compat.rb',
                       'Resource/TargetApp.app/Info.plist', 'Resource/TargetApp.app/TargetApp']
         for name in maintained:
             with self.subTest(file=name):

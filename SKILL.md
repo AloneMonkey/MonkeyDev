@@ -1,7 +1,7 @@
 ---
 name: monkeydev
 description: >-
-  使用 MonkeyDev 在 Apple Silicon Mac 上创建 Xcode MonkeyApp、越狱 Logos/CaptainHook Tweak 和 iOS 命令行工具，完成插件开发、签名打包、USB/SSH 安装，以及 LLDB 调试、OC 头文件导出、符号还原、Reveal 检查和方法追踪。
+  使用 MonkeyDev 在 Apple Silicon Mac 上创建 Xcode MonkeyApp、MonkeyPod 插件库、越狱 Logos/CaptainHook Tweak 和 iOS 命令行工具，完成插件开发、签名打包、USB/SSH 安装，以及 LLDB 调试、OC 头文件导出、符号还原、Reveal 检查和方法追踪。
 ---
 
 # MonkeyDev
@@ -307,3 +307,27 @@ ssh -o "ProxyCommand=inetcat -u <UDID> 22" -o "HostKeyAlias=monkeydev-usb-<UDID>
 - 命令行工具安装到 rootless 的 `/var/jb/usr/bin/<项目名>` 或 rootful 的 `/usr/bin/<项目名>`，通过设备 SSH 执行；不把 Xcode Run 当作设备安装启动入口。
 
 验收时先用 None 验证编译与 deb 内容，再按用户选择的认证方式验证自动安装。tweak 重启目标 App 后检查实际 Hook 命中；要求弹窗时还需确认可见，不能用手工 dlopen 或调用弹窗函数代替。命令行工具需在设备执行并检查输出与退出码。SSH 不通先区分 USB 设备识别、主机身份、SSH 登录与 sudo 安装失败，不把所有错误归结为端口转发。
+
+## 10. MonkeyPod 本地插件库
+
+需要跨工程复用 CaptainHook 插件时使用 MonkeyPod，不把它当作独立 App 或 deb 模板。当前已验证 iOS 15+ arm64、本地动态 Pod、MonkeyApp 签名安装和真机 Hook；发布流程未验收。
+
+1. 通过 Homebrew 安装 CocoaPods：`brew install cocoapods`，确认 `pod --version` 可执行，不使用 sudo 安装 Pod。
+2. Xcode 选择 **MonkeyDev → MonkeyPod**，生成 Objective-C framework、公开头文件和同目录的 podspec。修改 `.m` 的实际类和实例方法；默认示例可在内置 Demo 上验证 `getMyName` 返回 `MonkeyDevPod`。保持 CaptainHook 内部后端，不定义 `CHUseSubstrate`。
+3. 在 MonkeyApp 工程根目录创建 Podfile，将 Pod 接到 **Dylib target**，不是 App target。示例中替换实际名称和路径：
+
+   ```ruby
+   require '/opt/MonkeyDev/Tools/cocoapods-compat'
+   platform :ios, '15.0'
+   target 'YourAppDylib' do
+     use_frameworks! :linkage => :dynamic
+     pod 'YourPlugin', :path => '../YourPlugin/YourPlugin'
+   end
+   ```
+
+4. `:path` 指向 podspec 所在目录。执行 `pod install` 后打开 `.xcworkspace`，选择 MonkeyApp 的 App scheme，通过正常 Build/Run 流程安装。动态 framework 的 constructor 随加载执行；不要随意改成静态 Pod，避免仅含 Hook 函数的对象文件被链接器丢弃。
+5. 检查最终 App 的 `Frameworks/<Pod名>.framework`、Dylib 的链接依赖和完整签名，再检查真机实际 Hook。默认示例的 Demo 界面显示 `MonkeyDevPod`；不能只凭 pod install 或 framework 编译成功认定插件已生效。
+
+`cocoapods-compat.rb` 只在当前 Podfile 进程中适配已验证的 Xcode 27 字段：脚本数组转为字符串，framework 复制目的地转成等效表示，生成的 Pods 工程使用受支持格式。保留宿主工程版本，不修改 Xcode.app 或安装的 gem。旧解析器遇到其他 `dstSubfolder` 复制目录时会在保存工程前报错停止；不要移除检查强行安装。其他未知字段仍需评估，不能据此承诺所有第三方工程兼容。只更新 MonkeyPod 模板无需改 MonkeyApp 打包脚本，其已有流程会复制并签名 Pod framework。
+
+默认 podspec 的源文件路径相对 podspec 目录，支持 `.h/.m/.mm`。作者、homepage、source、许可为待填写的发布元数据；本地 `:path` 不下载示例 URL，也不代表可以直接发布。不要把实际用户的仓库、私钥或账号固化进通用模板。
