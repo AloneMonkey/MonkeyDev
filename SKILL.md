@@ -89,6 +89,10 @@ sudo env MONKEYDEV_SOURCE_DIR="$PWD" /bin/bash bin/md-update
 5. App target → Signing & Capabilities，选择团队，确认项目 Bundle ID 可由该团队签名。
 6. 选择连接的 iPhone，用 Debug 执行 Run。无需配置 `MONKEYDEV_INPUT_APP`，沿用 TargetApp 文件夹输入方式即可。
 
+直接在 Xcode 修改 `<App target 目录>/Info.plist`，可配置应用名称、权限说明和 URL Schemes。更换 IPA 后会保留这些修改，原始 IPA/App 不会被修改。
+
+构建会自动保存配置记录和最近一次 Info.plist 备份，无需额外配置。
+
 向导提供以下下拉项；创建后在 **App target → Build Settings → User-Defined** 修改，别改错到 Dylib target：
 
 | 向导项 | Build Setting | 默认 | 用途 |

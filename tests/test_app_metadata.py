@@ -33,6 +33,181 @@ class AppMetadataTests(unittest.TestCase):
         return subprocess.run(['/bin/bash', str(ROOT / 'Tools/pack.sh')], env=env,
                               capture_output=True, text=True, timeout=30)
 
+    def test_keep_original_bundle_id_can_be_toggled(self):
+        with tempfile.TemporaryDirectory(prefix='monkeydev-bundle-id-') as temp:
+            root = Path(temp)
+            inputs, products, env = self.pack_fixture(root)
+            app = inputs / 'Input.app'
+            shutil.copytree(ROOT / 'Resource/TargetApp.app', app)
+            plist = app / 'Info.plist'
+            original = plist.read_bytes()
+            original_id = plistlib.loads(original)['CFBundleIdentifier']
+            self.assertNotEqual(original_id, env['PRODUCT_BUNDLE_IDENTIFIER'])
+            for keep in ['YES', 'NO', 'YES']:
+                env['MONKEYDEV_DEFAULT_BUNDLEID'] = keep
+                result = self.run_pack(env)
+                self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+                expected = original_id if keep == 'YES' else env['PRODUCT_BUNDLE_IDENTIFIER']
+                for path in [products / 'Test.app/Info.plist', root / 'Test/Info.plist']:
+                    self.assertEqual(plistlib.loads(path.read_bytes())['CFBundleIdentifier'], expected)
+                self.assertEqual(plist.read_bytes(), original)
+
+    def test_original_executable_name_survives_input_replacement(self):
+        with tempfile.TemporaryDirectory(prefix='monkeydev-executable-') as temp:
+            root = Path(temp)
+            inputs, products, env = self.pack_fixture(root)
+            env['EXECUTABLE_NAME'] = 'Test Custom'
+            output = products / 'Test.app'
+            for name in ['FirstExecutable', 'Second Executable', 'Second Executable']:
+                app = inputs / 'Input.app'
+                if app.exists():
+                    shutil.rmtree(app)
+                shutil.copytree(ROOT / 'Resource/TargetApp.app', app)
+                (app / 'TargetApp').rename(app / name)
+                plist = app / 'Info.plist'
+                info = plistlib.loads(plist.read_bytes())
+                info['CFBundleExecutable'] = name
+                plist.write_bytes(plistlib.dumps(info))
+                original = {str(p.relative_to(app)): p.read_bytes()
+                            for p in app.rglob('*') if p.is_file()}
+                result = self.run_pack(env)
+                self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+                for path in [output / 'Info.plist', root / 'Test/Info.plist']:
+                    self.assertEqual(plistlib.loads(path.read_bytes())['CFBundleExecutable'], name)
+                self.assertTrue((output / name).is_file())
+                self.assertFalse((output / 'Test Custom').exists())
+                if name != 'FirstExecutable':
+                    self.assertFalse((output / 'FirstExecutable').exists())
+                self.assertEqual((output / name).read_bytes(), (app / name).read_bytes())
+                self.assertEqual(original, {str(p.relative_to(app)): p.read_bytes()
+                                            for p in app.rglob('*') if p.is_file()})
+
+    def test_same_executable_refreshes_metadata(self):
+        with tempfile.TemporaryDirectory(prefix='monkeydev-plist-refresh-') as temp:
+            root = Path(temp)
+            inputs, products, env = self.pack_fixture(root)
+            app = inputs / 'Input.app'
+            shutil.copytree(ROOT / 'Resource/TargetApp.app', app)
+            source_plist = app / 'Info.plist'
+            base = plistlib.loads(source_plist.read_bytes())
+            for version in ['1', '2', '2']:
+                info = {**base, 'CFBundleVersion': version,
+                        'NSMicrophoneUsageDescription': 'Input version ' + version}
+                if version == '1':
+                    info['MDObsoleteKey'] = 'removed by version 2'
+                source_plist.write_bytes(plistlib.dumps(info))
+                original = source_plist.read_bytes()
+                result = self.run_pack(env)
+                self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+                for path in [products / 'Test.app/Info.plist', root / 'Test/Info.plist']:
+                    output = plistlib.loads(path.read_bytes())
+                    self.assertEqual(output['CFBundleVersion'], version)
+                    self.assertEqual(output['NSMicrophoneUsageDescription'], 'Input version ' + version)
+                    self.assertEqual(output['CFBundleExecutable'], base['CFBundleExecutable'])
+                    self.assertEqual(output['CFBundleIdentifier'], env['PRODUCT_BUNDLE_IDENTIFIER'])
+                    if version == '2':
+                        self.assertNotIn('MDObsoleteKey', output)
+                self.assertEqual(source_plist.read_bytes(), original)
+            backup = root / '.monkeydev/Test-Info.plist.backup'
+            self.assertEqual(plistlib.loads(backup.read_bytes())['CFBundleVersion'], '1')
+
+    def test_first_build_preserves_edits_with_a_different_input(self):
+        with tempfile.TemporaryDirectory(prefix='monkeydev-first-plist-') as temp:
+            root = Path(temp)
+            inputs, products, env = self.pack_fixture(root)
+            app = inputs / 'Input.app'
+            shutil.copytree(ROOT / 'Resource/TargetApp.app', app)
+            (app / 'TargetApp').rename(app / 'OriginalExecutable')
+            source = app / 'Info.plist'
+            original = plistlib.loads(source.read_bytes())
+            original.update(CFBundleExecutable='OriginalExecutable', CFBundleVersion='99',
+                            DTSDKName='iphoneos27.0', NSMicrophoneUsageDescription='From IPA')
+            # The input has no storyboard; do not import the template's Main.
+            original.pop('UIMainStoryboardFile', None)
+            project = root / 'Test/Info.plist'
+            edits = plistlib.loads(project.read_bytes())
+            overrides = {
+                'CFBundleDisplayName': 'Edited before first build',
+                'NSCameraUsageDescription': 'My camera permission',
+                'CFBundleURLTypes': [{'CFBundleURLSchemes': ['my-scheme']}],
+                'CustomSettings': {'enabled': True, 'data': b'\x00\xff'},
+            }
+            edits.update(overrides)
+            project.write_bytes(plistlib.dumps(edits))
+            before = project.read_bytes()
+            for version in ['99', '100']:
+                original['CFBundleVersion'] = version
+                source.write_bytes(plistlib.dumps(original))
+                input_bytes = source.read_bytes()
+                result = self.run_pack(env)
+                self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+                for path in [project, products / 'Test.app/Info.plist']:
+                    info = plistlib.loads(path.read_bytes())
+                    for key, value in overrides.items():
+                        self.assertEqual(info[key], value)
+                    self.assertEqual(info['CFBundleVersion'], version)
+                    self.assertEqual(info['CFBundleExecutable'], 'OriginalExecutable')
+                    self.assertEqual(info['DTSDKName'], 'iphoneos27.0')
+                    self.assertEqual(info['NSMicrophoneUsageDescription'], 'From IPA')
+                    self.assertNotIn('UIMainStoryboardFile', info)
+                self.assertEqual(source.read_bytes(), input_bytes)
+                if version == '99':
+                    self.assertEqual((root / '.monkeydev/Test-Info.plist.backup').read_bytes(), before)
+
+    def test_plist_backup_and_history_are_ignored_by_git(self):
+        with tempfile.TemporaryDirectory(prefix='monkeydev-plist-git-') as temp:
+            root = Path(temp)
+            _, _, env = self.pack_fixture(root)
+            subprocess.run(['git', 'init', '-q', str(root)], check=True)
+            result = self.run_pack(env)
+            self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+            for name in ['Test-Info.plist.backup', 'Test.plist', '.gitignore']:
+                path = root / '.monkeydev' / name
+                self.assertTrue(path.is_file())
+                result = subprocess.run(['git', 'check-ignore', '-q', str(path)], cwd=root)
+                self.assertEqual(result.returncode, 0, str(path))
+            self.assertFalse(list(root.glob('.monkeydev-*-Info.plist.backup')))
+
+    def test_xcode_plist_edits_survive_input_updates(self):
+        with tempfile.TemporaryDirectory(prefix='monkeydev-plist-edits-') as temp:
+            root = Path(temp)
+            inputs, products, env = self.pack_fixture(root)
+            app = inputs / 'Input.app'
+            shutil.copytree(ROOT / 'Resource/TargetApp.app', app)
+            source = app / 'Info.plist'
+            original = plistlib.loads(source.read_bytes())
+            project = root / 'Test/Info.plist'
+            result = self.run_pack(env)
+            self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+            edits = plistlib.loads(project.read_bytes())
+            edits['CFBundleDisplayName'] = 'Edited in Xcode'
+            edits['NSCameraUsageDescription'] = 'My camera description'
+            edits['CFBundleURLTypes'] = [{'CFBundleURLSchemes': ['custom-scheme']}]
+            project.write_bytes(plistlib.dumps(edits))
+            for version in ['2', '3', '3']:
+                info = {**original, 'CFBundleVersion': version,
+                        'NSMicrophoneUsageDescription': 'Input ' + version}
+                source.write_bytes(plistlib.dumps(info))
+                result = self.run_pack(env)
+                self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+                output = plistlib.loads((products / 'Test.app/Info.plist').read_bytes())
+                self.assertEqual(output['CFBundleVersion'], version)
+                self.assertEqual(output['NSMicrophoneUsageDescription'], 'Input ' + version)
+                for key in ['CFBundleDisplayName', 'NSCameraUsageDescription', 'CFBundleURLTypes']:
+                    self.assertEqual(output[key], edits[key])
+            # Local edit history survives removal of build products (Xcode Clean).
+            shutil.rmtree(products / 'Test.app')
+            result = self.run_pack(env)
+            self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+            self.assertEqual(plistlib.loads((products / 'Test.app/Info.plist').read_bytes())['CFBundleDisplayName'],
+                             edits['CFBundleDisplayName'])
+            edits = plistlib.loads(project.read_bytes())
+            del edits['NSCameraUsageDescription']
+            project.write_bytes(plistlib.dumps(edits))
+            result = self.run_pack(env)
+            self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+            self.assertNotIn('NSCameraUsageDescription', plistlib.loads((products / 'Test.app/Info.plist').read_bytes()))
+
     def test_device_restriction_removed_after_plist_replacement_and_final_phase(self):
         with tempfile.TemporaryDirectory(prefix='monkeydev-final-plist-') as temp:
             root = Path(temp)
@@ -78,13 +253,18 @@ class AppMetadataTests(unittest.TestCase):
                 with zipfile.ZipFile(ipa, 'w') as archive:
                     demo = ROOT / 'Resource/TargetApp.app'
                     for file in demo.rglob('*'):
-                        if file.is_file():
+                        if file.is_file() and file.name != 'Info.plist':
                             archive.write(file, f'Payload/{bundle}/{file.relative_to(demo)}')
+                    info = plistlib.loads((demo / 'Info.plist').read_bytes())
+                    info['CFBundleVersion'] = {'one': '1', 'two': '2', 'three': '3'}[version]
+                    archive.writestr(f'Payload/{bundle}/Info.plist', plistlib.dumps(info))
                     archive.writestr(f'Payload/{bundle}/version.txt', version)
                     archive.writestr(f'Payload/{bundle}/only-{version}.txt', version)
                 result = self.run_pack(env)
                 self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
                 self.assertEqual((output / 'version.txt').read_text(), version)
+                self.assertEqual(plistlib.loads((output / 'Info.plist').read_bytes())['CFBundleVersion'],
+                                 info['CFBundleVersion'])
                 self.assertEqual(sorted(p.name for p in output.glob('only-*.txt')),
                                  ['only-' + version + '.txt'])
                 self.assertEqual((cached / 'version.txt').read_text(), 'legacy extracted app')

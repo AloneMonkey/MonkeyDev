@@ -149,7 +149,7 @@ fi
 requiredFiles=(
     bin/md bin/md-install bin/md-update bin/md-uninstall bin/md-doctor
     bin/monkeyparser bin/class-dump bin/createIPA.command
-    Tools/pack.sh Tools/mpack.sh Tools/reveal.sh Tools/tweak-deploy.sh Tools/cocoapods-compat.rb
+    Tools/pack.sh Tools/info-plist.js Tools/mpack.sh Tools/reveal.sh Tools/tweak-deploy.sh Tools/cocoapods-compat.rb
     Resource/TargetApp.app/Info.plist Resource/TargetApp.app/TargetApp
 )
 for item in "${requiredFiles[@]}"; do

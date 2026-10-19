@@ -238,9 +238,8 @@ function pack(){
 	if [[ ${MONKEYDEV_INSERT_DYLIB} == YES ]]; then
 		[[ -f "$injectedDylib" ]] || panic 1 "Project dylib not found: $injectedDylib"
 	fi
-	TARGET_INFO_PLIST=${SRCROOT}/${TARGET_NAME}/Info.plist
-	# environment
-	CURRENT_EXECUTABLE=$(/usr/libexec/PlistBuddy -c "Print CFBundleExecutable" "${TARGET_INFO_PLIST}" 2>/dev/null)
+	local projectInfoPlist="${SRCROOT}/${TARGET_NAME}/Info.plist"
+	TARGET_INFO_PLIST="${TEMP_PATH}/Info.plist"
 
 	# create tmp dir
 	rm -rf "${TEMP_PATH}" || panic 1 "Cannot clear input cache"
@@ -285,9 +284,12 @@ function pack(){
 	ORIGIN_BUNDLE_ID=$(/usr/libexec/PlistBuddy -c "Print CFBundleIdentifier"  "${COPY_APP_PATH}/Info.plist" 2>/dev/null)
 	TARGET_EXECUTABLE=$(/usr/libexec/PlistBuddy -c "Print CFBundleExecutable"  "${COPY_APP_PATH}/Info.plist" 2>/dev/null)
 
-	if [[ ${CURRENT_EXECUTABLE} != ${TARGET_EXECUTABLE} ]]; then
-		cp -rf "${COPY_APP_PATH}/Info.plist" "${TARGET_INFO_PLIST}"
-	fi
+	# Refresh input metadata while retaining edits to Xcode's normal Info.plist.
+	local plistStateDir="${PROJECT_DIR:-$SRCROOT}/.monkeydev"
+	local plistState="$plistStateDir/${TARGET_NAME}.plist"
+	local plistPending="$TEMP_PATH/info-state.plist"
+	[[ ! -L "$plistStateDir" && ! -L "$plistState" ]] || panic 1 "Info.plist state must not be a symlink"
+	/usr/bin/osascript -l JavaScript "$MONKEYDEV_PATH/Tools/info-plist.js" merge "$COPY_APP_PATH/Info.plist" "$projectInfoPlist" "$plistState" "$TARGET_INFO_PLIST" "$plistPending" || panic 1 "Cannot refresh Info.plist"
 
 	TARGET_DISPLAY_NAME=$(/usr/libexec/PlistBuddy -c "Print CFBundleDisplayName" "${TARGET_INFO_PLIST}" 2>/dev/null)
 
@@ -380,6 +382,31 @@ function pack(){
 	# Integrate the user's current SDK into the build copy before embedded signing.
 	source "${MONKEYDEV_PATH}/Tools/reveal.sh" || panic 1 "Cannot load Reveal integration"
 	integrateReveal
+	# Xcode processes the project plist after packaging. Publish the same metadata,
+	# retaining the previous project plist as a recovery copy.
+	mkdir -p "$plistStateDir" || panic 1 "Cannot create Info.plist state directory"
+	[[ -e "$plistStateDir/.gitignore" ]] || printf '*\n' > "$plistStateDir/.gitignore" || panic 1 "Cannot ignore local Info.plist state"
+	local projectPlistChanged=NO
+	if ! /usr/bin/cmp -s "$TARGET_INFO_PLIST" "$projectInfoPlist"; then
+		local plistBackup="$plistStateDir/${TARGET_NAME}-Info.plist.backup"
+		[[ ! -L "$plistBackup" ]] || panic 1 "Info.plist backup must not be a symlink"
+		if [[ -f "$projectInfoPlist" ]]; then
+			cp -p "$projectInfoPlist" "$plistBackup" || panic 1 "Cannot back up project Info.plist"
+		fi
+		local projectPlistStage
+		projectPlistStage=$(mktemp "${projectInfoPlist%/*}/.monkeydev-info.XXXXXX") || panic 1 "Cannot stage project Info.plist"
+		if ! cp -p "$TARGET_INFO_PLIST" "$projectPlistStage" || ! mv -f "$projectPlistStage" "$projectInfoPlist"; then
+			rm -f "$projectPlistStage"
+			panic 1 "Cannot refresh project Info.plist"
+		fi
+		projectPlistChanged=YES
+	fi
+	if ! /usr/bin/osascript -l JavaScript "$MONKEYDEV_PATH/Tools/info-plist.js" commit "$plistPending" "$projectInfoPlist" "$plistState"; then
+		if [[ "$projectPlistChanged" == YES ]]; then
+			cp -p "$plistBackup" "$projectInfoPlist" || panic 1 "Cannot restore project Info.plist; backup: $plistBackup"
+		fi
+		panic 1 "Cannot save Info.plist state"
+	fi
 	finishBuildApp
 }
 
@@ -403,19 +430,24 @@ function signEmbeddedCode() {
 	fi
 	[[ -n "${EXPANDED_CODE_SIGN_IDENTITY}" ]] || panic 1 "Xcode did not supply EXPANDED_CODE_SIGN_IDENTITY. Configure Signing & Capabilities."
 	[[ -d "${BUILD_APP_PATH}" ]] || panic 1 "Built App not found: ${BUILD_APP_PATH}"
-	local frameworkRoot="${BUILD_APP_PATH}/Frameworks"
-	[[ -d "$frameworkRoot" ]] || return 0
-	local item description
+	local executable mainExecutable item description
+	executable=$(/usr/libexec/PlistBuddy -c 'Print :CFBundleExecutable' "$BUILD_APP_PATH/Info.plist") || panic 1 "Cannot read the main executable before signing"
+	[[ -n "$executable" && "$executable" != */* && "$executable" != . && "$executable" != .. ]] || panic 1 "Invalid main executable name before signing"
+	mainExecutable="$BUILD_APP_PATH/$executable"
+	[[ -f "$mainExecutable" ]] || panic 1 "Main executable not found: $mainExecutable"
 	# Sign Mach-O contents first, then enclosing framework bundles from inside out.
+	# Some Apps keep libraries at the bundle root or in other subdirectories.
+	# Leave the main executable for signMainApp, which applies Xcode entitlements.
 	while IFS= read -r -d '' item; do
+		[[ ! "$item" -ef "$mainExecutable" ]] || continue
 		description=$(/usr/bin/file -b "$item") || panic 1 "Cannot inspect embedded code: $item"
 		if [[ "$description" == *Mach-O* ]]; then
 			/usr/bin/codesign --force --sign "$EXPANDED_CODE_SIGN_IDENTITY" --timestamp=none --generate-entitlement-der "$item" || panic 1 "Failed to sign embedded code: $item"
 		fi
-	done < <(/usr/bin/find "$frameworkRoot" -type f -print0)
+	done < <(/usr/bin/find "$BUILD_APP_PATH" -type f -print0)
 	while IFS= read -r -d '' item; do
 		/usr/bin/codesign --force --sign "$EXPANDED_CODE_SIGN_IDENTITY" --timestamp=none --generate-entitlement-der "$item" || panic 1 "Failed to sign framework: $item"
-	done < <(/usr/bin/find "$frameworkRoot" -depth -type d -name '*.framework' -print0)
+	done < <(/usr/bin/find "$BUILD_APP_PATH" -depth -type d -name '*.framework' -print0)
 }
 
 if [[ "$1" == "codesign" ]]; then

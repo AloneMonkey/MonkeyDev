@@ -12,3 +12,9 @@
 - 4.2 集成新的cycript，支持从网络下载cy脚本，直接@import
 - 4.3 优化部分代码，使用MDConfig.plist来配置
 - 4.4 支持通过代码执行cycript脚本以及使用脚本编写hook代码
+
+- 4.5 恢复维护，适配 Apple Silicon、Xcode 27 和 iOS 15+ arm64 真机；更新安装、更新和卸载脚本，不再修改 Xcode.app，增加 md-doctor 环境检查
+- 4.6 更新原生 arm64 monkeyparser 和 class-dump，支持 OC 符号还原与头文件导出；修复重复构建、覆盖安装和内嵌动态库签名，保留项目 Info.plist 的用户配置
+- 4.7 更新 CaptainHook、Logos 和 fishhook，移除旧 Cycript 和捆绑 Substrate；增加 LLDB 辅助工具和 OC 方法追踪，Reveal 改为按需加载本机 SDK
+- 4.8 更新 MonkeyApp 创建向导，支持选择注入、保留 Bundle ID、符号还原、头文件导出和 Reveal；适配 MonkeyPod 和新版 CocoaPods 工程集成
+- 4.9 适配越狱 Tweak 和命令行工具，支持 USB/IP 连接、免密/密码认证及自动安装

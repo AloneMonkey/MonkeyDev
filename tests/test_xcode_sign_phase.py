@@ -3,6 +3,7 @@ import hashlib
 import os
 from pathlib import Path
 import plistlib
+import shutil
 import subprocess
 import tempfile
 import unittest
@@ -76,6 +77,40 @@ class XcodeSigningPhaseTests(unittest.TestCase):
         result = self.run_phase(**settings)
         self.assertNotEqual(result.returncode, 0)
         self.assertIn('Xcode-generated signing entitlements not found', result.stderr)
+
+    def test_embedded_code_outside_frameworks_is_resigned(self):
+        root_library = self.app / 'ADManager.dylib'
+        extensionless_library = self.app / 'Libraries/Helper Library'
+        extensionless_library.parent.mkdir()
+        nested_framework = self.app / 'Helpers/Outer.framework/Frameworks/Inner.framework'
+        nested_framework.parent.mkdir(parents=True)
+        outer_framework = nested_framework.parent.parent
+        shutil.copy2(self.framework / 'Helper', outer_framework / 'Outer')
+        shutil.copytree(self.framework, nested_framework)
+        (nested_framework / 'Helper').rename(nested_framework / 'Inner')
+        for bundle, name in [(outer_framework, 'Outer'), (nested_framework, 'Inner')]:
+            (bundle / 'Info.plist').write_bytes(plistlib.dumps({
+                'CFBundleExecutable': name, 'CFBundlePackageType': 'FMWK',
+                'CFBundleIdentifier': 'com.example.' + name, 'CFBundleVersion': '1',
+            }))
+        for library in (root_library, extensionless_library):
+            shutil.copy2(self.dylib, library)
+        # No Frameworks directory: this used to skip embedded signing entirely.
+        shutil.rmtree(self.app / 'Frameworks')
+        resource = self.app / 'resource.txt'
+        resource.write_text('not executable code')
+        original_main = (self.app / 'Example').read_bytes()
+        original_resource = resource.read_bytes()
+        for _ in range(2):
+            result = self.run_phase()
+            self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+            for item in (root_library, extensionless_library, nested_framework, outer_framework):
+                subprocess.run(['codesign', '--verify', '--deep', '--strict', str(item)], check=True)
+                entitlements = subprocess.check_output(
+                    ['codesign', '-d', '--entitlements', ':-', str(item)], stderr=subprocess.DEVNULL)
+                self.assertFalse(entitlements.strip())
+            self.assertEqual((self.app / 'Example').read_bytes(), original_main)
+            self.assertEqual(resource.read_bytes(), original_resource)
 
     def test_missing_identity_fails(self):
         result = self.run_phase(EXPANDED_CODE_SIGN_IDENTITY="")
