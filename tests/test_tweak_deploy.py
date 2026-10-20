@@ -64,6 +64,15 @@ if 'dpkg -i' in command:sys.exit(int(os.environ.get('INSTALL_STATUS','0')))
         self.assertNotIn('StrictHostKeyChecking=no',' '.join(install['args']))
         self.assertTrue(calls[-1]['args'][-1].startswith('rm -f '))
 
+    def test_roothide_usb_has_a_separate_host_identity(self):
+        self.env.update(MonkeyDevConnectionType='USB', MonkeyDevDeviceUDID='test-device-123',
+                        MONKEYDEV_PACKAGE_SCHEME='roothide')
+        result,calls=self.run_deploy()
+        self.assertEqual(result.returncode,0,result.stderr)
+        for call in calls:
+            self.assertIn('HostKeyAlias=monkeydev-roothide-test-device-123',call['args'])
+            self.assertNotIn('HostKeyAlias=monkeydev-usb-test-device-123',call['args'])
+
     def test_password_file_uses_stdin_not_command_arguments(self):
         secret='sample $ password; with spaces'
         password=self.work/'password'

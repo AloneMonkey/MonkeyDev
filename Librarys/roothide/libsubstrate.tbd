@@ -1,0 +1,13 @@
+---
+archs:           [ armv7, armv7s, arm64, arm64e ]
+platform:        ios
+install-name:    '@loader_path/.jbroot/usr/lib/libsubstrate.dylib'
+current-version: 0.0.0
+compatibility-version: 0.0.0
+exports:
+  - archs:            [ armv7, armv7s, arm64, arm64e ]
+    symbols:          [ _MSCloseImage, _MSDebug, _MSFindAddress, _MSFindSymbol,
+                        _MSGetImageByName, _MSHookClassPair, _MSHookFunction,
+                        _MSHookMemory, _MSHookMessageEx, _MSImageAddress,
+                        _MSMapImage ]
+...

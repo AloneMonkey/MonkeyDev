@@ -4,7 +4,7 @@ set -eo pipefail
 
 scriptVersion=3.0
 branch="${1:-${MONKEYDEV_REF:-master}}"
-templatesRef="${MONKEYDEV_TEMPLATES_REF:-f811f23bf7512d5b5ba2fa52f54d1ecc8cbb78da}"
+templatesRef="${MONKEYDEV_TEMPLATES_REF:-9d638522c66190c358df06db20a3cd1f8ccf1557}"
 dumpRef=master
 # DESTDIR is for packaging/tests only; it never registers templates or edits profiles.
 destination="${MONKEYDEV_DESTDIR:-}"
@@ -150,6 +150,11 @@ requiredFiles=(
     bin/md bin/md-install bin/md-update bin/md-uninstall bin/md-doctor
     bin/monkeyparser bin/class-dump bin/createIPA.command
     Tools/pack.sh Tools/info-plist.js Tools/mpack.sh Tools/reveal.sh Tools/tweak-deploy.sh Tools/cocoapods-compat.rb
+    Librarys/roothide/libsubstrate.tbd
+    Librarys/roothide/libroothide.tbd
+    Librarys/roothide/include/roothide.h
+    Librarys/roothide/include/module.modulemap
+    Librarys/roothide/LICENSE
     Resource/TargetApp.app/Info.plist Resource/TargetApp.app/TargetApp
 )
 for item in "${requiredFiles[@]}"; do

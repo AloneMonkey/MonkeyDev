@@ -17,7 +17,7 @@ description: >-
 - Apple Silicon Mac，使用原生 arm64 终端；完整 Xcode 已安装并完成首次启动配置。
 - MonkeyApp：iPhone 开启开发者模式、信任此 Mac，并在安装启动时保持解锁。准备可用的开发团队、签名证书及授权该设备的 provisioning profile；Personal Team 的实际限制由 Xcode/Apple 决定。
 - MonkeyApp 输入为已砸壳的 IPA 或未加密 `.app`，主程序及保留的嵌入代码应符合 thin arm64 范围。MonkeyDev 不负责在非越狱设备上自动砸壳。
-- 当前支持基线为 iOS 15+、arm64 真机。MonkeyApp 不覆盖 Intel 主机、模拟器、Fat 输入、arm64e/PAC 或加密输入；设备 CPU 为 arm64e 不妨碍运行 arm64 App。越狱三个模板的 rootless arm64 已真机验证，rootful 仅完成构建与打包检查。
+- 当前支持基线为 iOS 15+、arm64 真机。MonkeyApp 不覆盖 Intel 主机、模拟器、Fat 输入、arm64e/PAC 或加密输入；设备 CPU 为 arm64e 不妨碍运行 arm64 App。越狱三个模板的 rootless arm64 已真机验证，rootful 仅完成构建与打包检查。Logos Tweak、CaptainHook Tweak 的 roothide arm64 已在 iPhone X / iOS 16.7.16 / Dopamine-roothide 2.4.9.27 + ElleKit 验证安装与 Hook 弹窗，Command-line Tool 的 C 示例已验证自动安装及 SSH 执行；不据此声明 Bootstrap 或系统进程兼容。
 
 先检查：
 
@@ -262,7 +262,9 @@ brew install sshpass
 
 Logos Tweak 另需当前普通用户的 `~/theos/bin/logos.pl` 和 Theos 对应的头文件、链接库。CaptainHook 默认使用内部 Objective-C Runtime 后端，不定义 `CHUseSubstrate`，不添加 `-lsubstrate`；纯 C/C++ 命令行工具不依赖 Theos。
 
-创建向导只配置认证方式：
+Logos Tweak、CaptainHook Tweak、Command-line Tool 创建向导提供 **Package Scheme**：`rootless`（默认）、`rootful`、`roothide`，自动联动链接与打包配置。
+
+三个模板的认证方式相同：
 
 | SSH Authentication | Build 行为 | 账号密码 |
 | --- | --- | --- |
@@ -277,10 +279,14 @@ USB 默认通过 inetcat 直连设备 SSH 端口 22，不启动 iproxy，不需�
 免密模式默认匹配 `~/.ssh/config` 的 `monkeydev-usb` 别名，沿用其中的用户、IdentityFile 或 ssh-agent；不要照搬其他人的私钥路径或假设当前 Mac 用户名就是设备账号。首次连接先在终端核对主机身份，例如：
 
 ```bash
+# rootless / rootful
 ssh -o "ProxyCommand=inetcat -u <UDID> 22" -o "HostKeyAlias=monkeydev-usb-<UDID>" mobile@usb-iphone
+
+# roothide
+ssh -o "ProxyCommand=inetcat -u <UDID> 22" -o "HostKeyAlias=monkeydev-roothide-<UDID>" mobile@usb-iphone
 ```
 
-把 `<UDID>` 和账号替换为实际值，使用已有密钥配置或 `-i`。USB 安装使用同一 HostKeyAlias，不关闭主机密钥检查。SSH 免密与 sudo 免密独立；mobile 安装 deb 仍需已有 sudo 权限和所需密码，不为了通过测试擅自放宽 sudo 权限。
+把 `<UDID>` 和账号替换为实际值，使用已有密钥配置或 `-i`。USB 安装使用同一 HostKeyAlias；roothide 改用 `monkeydev-roothide-<UDID>`，避免与同一手机的旧环境记录冲突，不关闭主机密钥检查。SSH 免密与 sudo 免密独立；mobile 安装 deb 仍需已有 sudo 权限和所需密码，不为了通过测试擅自放宽 sudo 权限。
 
 ### 高级连接与布局
 
@@ -295,12 +301,27 @@ ssh -o "ProxyCommand=inetcat -u <UDID> 22" -o "HostKeyAlias=monkeydev-usb-<UDID>
 | `MonkeyDevDeviceUDID` | 可选，指定 USB 目标设备 |
 | `MonkeyDevDevicePasswordFile` | 本机一行密码文件，用于密码登录或免密登录后的 sudo；优先于 `MonkeyDevDevicePassword` |
 | `MonkeyDevDevicePassword` | 设备密码，可在本地 xcconfig 配置；KEY 模式下只供 sudo，不切换 SSH 登录方式 |
-| `MONKEYDEV_PACKAGE_SCHEME` | 默认 `rootless`；确认设备为 rootful 后改成 `rootful` |
+| `MONKEYDEV_PACKAGE_SCHEME` | 越狱模板向导可选 `rootless`、`rootful`、`roothide`，默认 `rootless`；创建后仍可修改 |
 | `MonkeyDevkillProcessOnInstall` | 可选目标进程名，默认留空；不默认重启 SpringBoard |
 
-私钥和密码文件支持 `~/` 或相对工程目录的路径。向导的 `KEY/PASSWORD` 将 `MonkeyDevInstallOnAnyBuild` 联动为 YES，`None` 为 NO，且脚本会阻止 None 安装；手动把该安装设置改为 NO 可关闭 KEY/PASSWORD 的每次 Build 安装。保留 rootless/rootful 路径映射辅助字段，不要求用户手动修改它们。
+私钥和密码文件支持 `~/` 或相对工程目录的路径。向导的 `KEY/PASSWORD` 将 `MonkeyDevInstallOnAnyBuild` 联动为 YES，`None` 为 NO，且脚本会阻止 None 安装；手动把该安装设置改为 NO 可关闭 KEY/PASSWORD 的每次 Build 安装。路径映射辅助字段自动联动，不要求用户手动修改。
 
 打包在临时副本完成，deb 输出到 `<工程目录>/Packages/`。资源仍放在工程 `Package/Library/...` 或 `Package/usr/...`，不要手工再套 `var/jb`；rootless 自动添加 `/var/jb` 前缀，架构为 `iphoneos-arm64`，rootful 使用传统路径和 `iphoneos-arm` 包架构，两者二进制均为 arm64。
+
+Logos / CaptainHook 的 roothide 方案使用无 `/var/jb` 前缀的包布局、`iphoneos-arm64e` 包标识和 `.jbroot` 相对加载路径，当前仍编译 arm64 二进制。Logos 使用随 MonkeyDev 提供的 Hook 接口链接声明；CaptainHook 使用内部 Objective-C runtime 后端，无需链接 Substrate。两者均不打包 Substrate 运行库，也不替换用户的 Theos。Tweak 设备需安装 roothide 兼容的 ElleKit。
+
+仅选择 `roothide` 时，三个越狱模板提供官方路径 SDK，可直接 `#include <roothide.h>`，无需手动配置搜索路径。未调用 SDK API 时，最终产物不保留 `libroothide` 依赖；调用后使用设备 `roothide` 包自带的运行库，不向 deb 捆绑运行库。
+
+例如将资源放入 `Package/Library/MyTweak/config.plist`，在 roothide 中读取：
+
+```objc
+#include <roothide.h>
+NSString *path = jbroot(@"/Library/MyTweak/config.plist");
+NSDictionary *config = [NSDictionary dictionaryWithContentsOfFile:path];
+```
+
+SDK 提供 C、Objective-C、C++ 的 `jbroot()`、`rootfs()` 及 `jbrand()`。不要硬编码 `/var/jb` 或随机 `.jbroot-*` 路径；这些接口不会自动改写现有文件访问，也不会自动提升进程权限。rootless/rootful 不引入 SDK；同一份源码需用 `#if defined(THEOS_PACKAGE_SCHEME_ROOTHIDE)` 区分 SDK 调用和其他方案的路径处理。App 自身沙盒路径不应统一套 `jbroot()`。 roothide 的独立可执行程序默认受沙盒限制；使用 SDK 访问越狱资源时，需要按实际用途在工程 `monkeydev.entitlements` 配置权限，参见 [RootHide 官方权限说明](https://github.com/roothide/Developer/blob/main/entitlements.md)。模板仍保持空权限；不要为 dylib 额外申请或修改目标 App 的权限。
+
 
 ### 源码与验收
 
@@ -308,7 +329,7 @@ ssh -o "ProxyCommand=inetcat -u <UDID> 22" -o "HostKeyAlias=monkeydev-usb-<UDID>
 - CaptainHook Tweak：编辑 `<项目名>.mm`，使用实际类和方法签名，在类已加载且存在时注册 Hook。模板只提供示例，不内置特定 App 的弹窗。
 - 两种 tweak 均需设置 `Package/Library/MobileSubstrate/DynamicLibraries/<项目名>.plist` 的 Filter/ Bundles 为目标 App 的 Bundle ID；默认占位 ID 不会命中用户 App。它们默认不带 LLDBTools、Trace 或 Reveal，不能假定 MonkeyApp 的辅助入口可用。
 - Command-line Tool：支持 C、C++、Foundation、Core Foundation；没有 Core Data/Core Services 类型。源码通常为 `main.c`、`main.cpp` 或 `main.m`。默认无额外 entitlements，需权限时按具体用途配置；不默认开启 `platform-application`。
-- 命令行工具安装到 rootless 的 `/var/jb/usr/bin/<项目名>` 或 rootful 的 `/usr/bin/<项目名>`，通过设备 SSH 执行；不把 Xcode Run 当作设备安装启动入口。
+- 命令行工具安装到 rootless 的 `/var/jb/usr/bin/<项目名>` 或 rootful / roothide 的 `/usr/bin/<项目名>`（roothide 环境内的逻辑路径），通过设备 SSH 执行；不把 Xcode Run 当作设备安装启动入口。
 
 验收时先用 None 验证编译与 deb 内容，再按用户选择的认证方式验证自动安装。tweak 重启目标 App 后检查实际 Hook 命中；要求弹窗时还需确认可见，不能用手工 dlopen 或调用弹窗函数代替。命令行工具需在设备执行并检查输出与退出码。SSH 不通先区分 USB 设备识别、主机身份、SSH 登录与 sudo 安装失败，不把所有错误归结为端口转发。
 

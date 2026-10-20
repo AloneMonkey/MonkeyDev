@@ -39,7 +39,10 @@ case "$connection" in
         [[ -n "$udid" && "$udid" =~ ^[A-Za-z0-9-]+$ ]] || fail "Set MonkeyDevDeviceUDID for USB installation"
         inetcat="$(command -v inetcat)" || fail "USB SSH requires inetcat: brew install libusbmuxd"
         printf -v proxy '%q ' "$inetcat" -u "$udid" "${port:-22}"
-        args+=(-o "ProxyCommand=$proxy" -o "HostKeyAlias=monkeydev-usb-$udid")
+        localAlias="monkeydev-usb-$udid"
+        # The same phone can have separate SSH host keys in each environment.
+        [[ "${MONKEYDEV_PACKAGE_SCHEME:-}" != roothide ]] || localAlias="monkeydev-roothide-$udid"
+        args+=(-o "ProxyCommand=$proxy" -o "HostKeyAlias=$localAlias")
         host="${MonkeyDevDeviceIP:-monkeydev-usb-$udid}"
         ;;
     IP)

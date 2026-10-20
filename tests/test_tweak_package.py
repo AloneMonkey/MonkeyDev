@@ -18,8 +18,8 @@ class TweakPackageTests(unittest.TestCase):
         self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
         return result.stdout
 
-    def build(self, work, scheme, no_install=False, tool=False):
-        if not tool and not (THEOS / 'bin/logos.pl').exists():
+    def build(self, work, scheme, no_install=False, tool=False, captain=False):
+        if not tool and not captain and not (THEOS / 'bin/logos.pl').exists():
             self.skipTest('Logos tweak requires Theos')
         project = work / 'Project With Spaces'
         package = project / 'Tweak/Package'
@@ -44,12 +44,23 @@ class TweakPackageTests(unittest.TestCase):
             flags = ['-Wl,-rpath,/var/jb/usr/lib', '-Wl,-rpath,/var/jb/Library/Frameworks',
                      '-Wl,-rpath,@loader_path/.jbroot/usr/lib',
                      '-Wl,-rpath,@loader_path/.jbroot/Library/Frameworks']
+        elif scheme == 'roothide':
+            libdir = ROOT / 'Librarys/roothide'
+            flags = ['-Wl,-rpath,@loader_path/.jbroot/usr/lib',
+                     '-Wl,-rpath,@loader_path/.jbroot/Library/Frameworks']
+        install_name = ('@loader_path/.jbroot/Library/MobileSubstrate/DynamicLibraries/libTweak.dylib'
+                        if scheme == 'roothide' else '@rpath/libTweak.dylib')
         binary = products / ('CommandFixture' if tool else 'libTweak.dylib')
         if tool:
             source = work / 'main.c'
             source.write_text('#include <stdio.h>\nint main(void) { puts("Hello, World!"); return 0; }\n')
             self.run_cmd(['xcrun', 'clang', '-target', 'arm64-apple-ios15.0', '-isysroot', sdk,
                           str(source), '-o', str(binary)])
+        elif captain:
+            self.run_cmd(['xcrun', 'clang', '-target', 'arm64-apple-ios15.0', '-isysroot', sdk,
+                          '-dynamiclib', '-fobjc-arc', '-DMD_CAPTAIN_DEVICE_TEST', '-I' + str(ROOT / 'include'),
+                          '-framework', 'Foundation', '-Wl,-install_name,' + install_name,
+                          str(ROOT / 'tests/captainhook_fixture.m'), '-o', str(binary)])
         else:
             source = work / 'Hook.xm'
             source.write_text('%config(generator=MobileSubstrate);\n#import <Foundation/Foundation.h>\n%hook NSObject\n- (NSString *)description {\n    return %orig;\n}\n%end\n')
@@ -58,7 +69,7 @@ class TweakPackageTests(unittest.TestCase):
             self.run_cmd(['xcrun', 'clang++', '-target', 'arm64-apple-ios15.0', '-isysroot', sdk,
                           '-dynamiclib', '-fobjc-arc', '-I' + str(THEOS / 'vendor/include'),
                           '-F' + str(THEOS / 'vendor/lib'), '-L' + str(libdir), '-lsubstrate', '-framework', 'Foundation',
-                          '-Wl,-install_name,@rpath/libTweak.dylib', *flags, str(generated), '-o', str(binary)])
+                          '-Wl,-install_name,' + install_name, *flags, str(generated), '-o', str(binary)])
         env = dict(os.environ, ACTION='build', PROJECT_DIR=str(project), PROJECT_NAME='Tweak',
                    TARGET_NAME='Tweak', TARGET_BUILD_DIR=str(products), BUILT_PRODUCTS_DIR=str(products),
                    EXECUTABLE_PATH=binary.name, SHALLOW_BUNDLE='NO', INSTALL_MODE_FLAG='0755',
@@ -98,6 +109,7 @@ class TweakPackageTests(unittest.TestCase):
             else:
                 self.assertFalse(any(n.endswith(('Tweak.plist', '0xdeadfa11')) for n in names))
             self.assertNotIn('DEBIAN/control', names)
+            self.assertFalse(any(n.endswith('.tbd') or n.endswith('/libsubstrate.dylib') for n in names))
             for member in data.getmembers():
                 self.assertEqual((member.uid, member.gid), (0, 0))
                 self.assertEqual(member.pax_headers, {})
@@ -106,11 +118,21 @@ class TweakPackageTests(unittest.TestCase):
         with archive('control.tar.gz') as control:
             metadata = control.extractfile('control').read().decode()
             arch = 'iphoneos-arm64' if prefix else 'iphoneos-arm'
+            if scheme == 'roothide':
+                arch = 'iphoneos-arm64e'
             self.assertIn('Architecture: ' + arch + '\n', metadata)
         linked = self.run_cmd(['otool', '-L', str(binary)])
         expected = '@rpath/CydiaSubstrate.framework/CydiaSubstrate' if prefix else '/Library/Frameworks/CydiaSubstrate.framework/CydiaSubstrate'
-        if tool:
-            self.assertNotIn('substrate', linked.lower())
+        if scheme == 'roothide':
+            expected = '@loader_path/.jbroot/usr/lib/libsubstrate.dylib'
+            self.assertNotIn('/var/jb', linked)
+            if not tool:
+                self.assertIn(install_name, linked)
+        if tool or captain:
+            self.assertNotIn('libsubstrate.dylib', linked)
+            self.assertNotIn('CydiaSubstrate.framework/', linked)
+            undefined = self.run_cmd(['nm', '-u', str(binary)])
+            self.assertNotIn('MSHook', undefined)
         else:
             self.assertIn(expected, linked)
         signature = subprocess.run(['codesign', '-dv', str(binary)], capture_output=True, text=True)
@@ -126,12 +148,21 @@ class TweakPackageTests(unittest.TestCase):
         with tempfile.TemporaryDirectory(prefix='md tweak rootful ') as work:
             self.build(Path(work), 'rootful')
 
+    def test_roothide_real_build_and_package(self):
+        with tempfile.TemporaryDirectory(prefix='md tweak roothide ') as work:
+            self.build(Path(work), 'roothide')
+
+    def test_captainhook_packages_without_substrate(self):
+        for scheme in ('rootless', 'rootful', 'roothide'):
+            with self.subTest(scheme=scheme), tempfile.TemporaryDirectory(prefix='md captain ') as work:
+                self.build(Path(work), scheme, captain=True)
+
     def test_none_builds_deb_without_installing(self):
         with tempfile.TemporaryDirectory(prefix='md tweak no install ') as work:
             self.build(Path(work), 'rootless', no_install=True)
 
     def test_command_line_tool_packages(self):
-        for scheme in ('rootless', 'rootful'):
+        for scheme in ('rootless', 'rootful', 'roothide'):
             with self.subTest(scheme=scheme), tempfile.TemporaryDirectory(prefix='md command tool ') as work:
                 self.build(Path(work), scheme, tool=True)
 

@@ -122,11 +122,11 @@ end
 
 ## 越狱 Logos Tweak
 
-Logos Tweak 支持选择 rootless / rootful 包布局，使用设备上兼容 MobileSubstrate 接口的 Hook 框架（例如 ElleKit）。不需要随插件打包旧 Substrate。rootless 已在越狱真机验证，rootful 当前完成构建和包内容检查。
+Logos Tweak、CaptainHook Tweak、Command-line Tool 创建向导的 **Package Scheme** 可选择 `rootless`（默认）、`rootful` 或 `roothide`，自动切换构建配置和 deb 布局。Tweak 需要兼容 MobileSubstrate 接口的 Hook 框架（例如对应环境的 ElleKit），不随插件打包旧 Substrate。roothide 使用随机越狱根目录，不能用普通 rootless 包直接代替。 仅选择 roothide 时可直接 `#include <roothide.h>`，通过 `jbroot()` 等官方接口访问插件资源；未调用 API 不保留运行库依赖。rootless/rootful 不引入该 SDK。
 
 CaptainHook Tweak 和 Command-line Tool 使用相同的 USB、认证和 deb 安装配置。CaptainHook 默认使用内部 Objective-C Runtime Hook，不链接 Substrate；仍需设备上的 tweak 加载器加载插件。将工程 `Package/Library/MobileSubstrate/DynamicLibraries/<项目名>.plist` 的 Filter 改为目标 App 的 Bundle ID。
 
-Command-line Tool 保留 C、C++、Foundation、Core Foundation 类型，使用 ldid 签名，默认不申请额外权限。rootless 安装到 `/var/jb/usr/bin`，rootful 安装到 `/usr/bin`；安装后通过设备 SSH 执行程序，不通过 Xcode Run 启动。
+Command-line Tool 保留 C、C++、Foundation、Core Foundation 类型，使用 ldid 签名，默认不申请额外权限。rootless 安装到 `/var/jb/usr/bin`，rootful / roothide 安装到 `/usr/bin`（roothide 环境内的逻辑路径）；安装后通过设备 SSH 执行程序，不通过 Xcode Run 启动。
 
 创建向导默认使用 USB 连接和 rootless 布局，授权方式可选 `None`、`KEY`（默认，SSH 密钥免密）或 `PASSWORD`（输入设备账号、密码）。`None` 只生成 deb，不安装；`KEY` 和 `PASSWORD` 在 Build 后自动安装 tweak。免密模式沿用 SSH 配置；只有密码模式启用账号、密码输入，默认账号为 `mobile`，密码必填。向导填写的密码会保存在工程中，请勿提交或分享。
 
@@ -147,12 +147,16 @@ USB 优先使用显式配置的 UDID，其次使用 Xcode 选择的设备，否�
 
 USB 模式需要 `brew install libusbmuxd libimobiledevice`，无需启动 iproxy；密码认证需要 `brew install sshpass`。密码也可通过不提交 Git 的本地配置设置 `MonkeyDevDevicePassword`，或使用密码文件。密码文件与直接配置同时存在时，以密码文件为准。
 
-首次连接先在终端确认设备 SSH 主机身份。USB 模式使用 `monkeydev-usb-<UDID>` 作为主机身份别名；IP 模式使用目标主机身份；SSH 模式遵循用户已有配置。构建不会关闭主机密钥检查。SSH 免密登录与 sudo 权限独立：mobile 免密登录后，安装 deb 仍需要 sudo 密码或已有的免密 sudo 权限。
+首次连接先在终端确认设备 SSH 主机身份。USB 模式在 rootless/rootful 下使用 `monkeydev-usb-<UDID>`，roothide 下使用独立的 `monkeydev-roothide-<UDID>` 作为主机身份别名；IP 模式使用目标主机身份；SSH 模式遵循用户已有配置。构建不会关闭主机密钥检查。SSH 免密登录与 sudo 权限独立：mobile 免密登录后，安装 deb 仍需要 sudo 密码或已有的免密 sudo 权限。
 
 首次 USB 连接可用下面的命令，将 `<UDID>` 和 `mobile` 替换为实际设备与账号；密钥可由 SSH 配置提供，也可通过 `-i` 指定：
 
 ```bash
+# rootless / rootful
 ssh -o "ProxyCommand=inetcat -u <UDID> 22" -o "HostKeyAlias=monkeydev-usb-<UDID>" mobile@usb-iphone
+
+# roothide
+ssh -o "ProxyCommand=inetcat -u <UDID> 22" -o "HostKeyAlias=monkeydev-roothide-<UDID>" mobile@usb-iphone
 ```
 
 ## 支持范围与迁移
@@ -160,7 +164,7 @@ ssh -o "ProxyCommand=inetcat -u <UDID> 22" -o "HostKeyAlias=monkeydev-usb-<UDID>
 - 支持 MonkeyApp 的 thin arm64、未加密 iOS 真机输入；不支持 Intel 主机、模拟器、arm64e/PAC、Fat 或加密输入。arm64e 设备可以运行 arm64 App。
 - 打包副本会移除 App 扩展、Watch 和旧 Store 元数据；当前不覆盖扩展的独立签名与安装。原始 IPA/App 保留。
 - Cycript 和旧 Substrate 运行库已移除。CaptainHook/Logos internal 保留；Logos internal 不支持 `%hookf`。
-- Logos Tweak、CaptainHook Tweak、iOS Command-line Tool 的 rootless arm64 已完成真机验证；rootful 仅完成构建和打包检查。
+- Logos Tweak、CaptainHook Tweak、iOS Command-line Tool 的 rootless arm64 已完成真机验证；Logos Tweak、CaptainHook Tweak 另已在 iPhone X / iOS 16.7.16 / Dopamine-roothide 2.4.9.27 + ElleKit 验证安装及 Hook 弹窗，Command-line Tool 的 C 示例也已验证安装与 SSH 执行；rootful 仅完成构建和打包检查。
 - MonkeyPod 已完成本地动态 Pod 接入 MonkeyApp、签名安装及真机 Hook 验证；Pod 发布流程未验证。
 - macOS 模板尚未迁移验证，不在当前支持范围内。
 - 模板更新影响新建项目；已有工程需单独迁移。增量构建的签名阶段必须每次执行。

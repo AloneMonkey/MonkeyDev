@@ -751,6 +751,7 @@ function xcodeBuildPhase() # no args
 		case "$MONKEYDEV_PACKAGE_SCHEME" in
 			rootless) packageArch=iphoneos-arm64; packagePrefix=/var/jb ;;
 			rootful) packageArch=iphoneos-arm; packagePrefix="" ;;
+			roothide) packageArch=iphoneos-arm64e; packagePrefix="" ;;
 			*) panic 1 "Unsupported package scheme: $MONKEYDEV_PACKAGE_SCHEME" ;;
 		esac
 		local expectedInstallPath="$packagePrefix/Library/MobileSubstrate/DynamicLibraries"
@@ -892,6 +893,7 @@ function xcodeBuildPhase() # no args
 							local deployScript="$(cd "$(dirname "${BASH_SOURCE[0]}")/../Tools" && pwd)/tweak-deploy.sh"
 							export MonkeyDevDeviceIP MonkeyDevDevicePort MonkeyDevDeviceUser MonkeyDevDeviceKey MonkeyDevDevicePassword MonkeyDevDevicePasswordFile MonkeyDevkillProcessOnInstall
 							export MonkeyDevConnectionType MonkeyDevDeviceUDID MonkeyDevAuthentication
+							export MONKEYDEV_PACKAGE_SCHEME
 							/bin/bash "$deployScript" "$allPackagesDir/$packageFileName"
 						else
 							managePackageOnDevice "install" "$allPackagesDir/$packageFileName" "$MonkeyDevDeviceIP" "$MonkeyDevDevicePort"
