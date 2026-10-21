@@ -4,7 +4,7 @@ set -eo pipefail
 
 scriptVersion=3.0
 branch="${1:-${MONKEYDEV_REF:-master}}"
-templatesRef="${MONKEYDEV_TEMPLATES_REF:-9d638522c66190c358df06db20a3cd1f8ccf1557}"
+templatesRef="${MONKEYDEV_TEMPLATES_REF:-b2dc8f7a40f33a13617959b98c61e799d1a2503c}"
 dumpRef=master
 # DESTDIR is for packaging/tests only; it never registers templates or edits profiles.
 destination="${MONKEYDEV_DESTDIR:-}"
@@ -149,7 +149,11 @@ fi
 requiredFiles=(
     bin/md bin/md-install bin/md-update bin/md-uninstall bin/md-doctor
     bin/monkeyparser bin/class-dump bin/createIPA.command
-    Tools/pack.sh Tools/info-plist.js Tools/mpack.sh Tools/reveal.sh Tools/tweak-deploy.sh Tools/cocoapods-compat.rb
+    Tools/pack.sh Tools/info-plist.js Tools/mpack.sh Tools/reveal.sh Tools/lookin.sh Tools/tweak-deploy.sh Tools/cocoapods-compat.rb
+    Librarys/Lookin/LookinServer.framework/LookinServer
+    Librarys/Lookin/LookinServer.framework/Info.plist
+    Librarys/Lookin/LookinServer.framework/LICENSE
+    Librarys/Lookin/LookinServer-1.2.8-source.tar.gz
     Librarys/roothide/libsubstrate.tbd
     Librarys/roothide/libroothide.tbd
     Librarys/roothide/include/roothide.h
@@ -225,6 +229,7 @@ for script in md md-install md-update md-doctor md-uninstall; do
 done
 /bin/bash -n "$candidate/Tools/pack.sh"
 /bin/bash -n "$candidate/Tools/reveal.sh"
+/bin/bash -n "$candidate/Tools/lookin.sh"
 
 if [[ -n "${MONKEYDEV_DUMP_DIR:-}" ]]; then
     for name in dump.py dump.js; do

@@ -63,6 +63,12 @@ if [[ -f "$reveal/Info.plist" ]]; then
 else
     echo "NOTE: Reveal SDK not found; install it from Reveal if needed."
 fi
+lookin="${MONKEYDEV_LOOKIN_SDK:-$root/Librarys/Lookin/LookinServer.framework}"
+if [[ -f "$lookin/LookinServer" ]]; then
+    echo "Lookin SDK: $lookin (optional, select MONKEYDEV_UI_INSPECTOR=Lookin in Debug)"
+else
+    echo "NOTE: Bundled Lookin SDK not found; reinstall/update MonkeyDev or set MONKEYDEV_LOOKIN_SDK"
+fi
 echo "NOTE: Device signing needs a signing identity and matching provisioning profile."
 echo "NOTE: Cycript/Substrate are retired. Legacy templates outside MonkeyApp need separate validation."
 [[ "$failures" == 0 ]]

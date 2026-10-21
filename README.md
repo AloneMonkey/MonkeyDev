@@ -49,7 +49,7 @@ macOS 原有 `/bin/sh -c` 入口也已验证兼容。安装位置为 `/opt/Monke
 
 `Target App` 文本框是历史越狱 Frida/SSH dump 入口，不是 IPA 路径选择器；该入口未纳入当前验证范围。使用上述 TargetApp 文件夹放入未加密输入，MonkeyDev 不负责在非越狱设备上自动砸壳。
 
-创建向导提供以下 YES/NO 下拉框；创建后仍可在 **App target → Build Settings → User-Defined** 修改：
+创建向导提供以下下拉选项；创建后仍可在 **App target → Build Settings → User-Defined** 修改：
 
 | 选项 | Build Setting | 默认 |
 | --- | --- | --- |
@@ -57,7 +57,7 @@ macOS 原有 `/bin/sh -c` 入口也已验证兼容。安装位置为 `/opt/Monke
 | Keep Original Bundle ID | `MONKEYDEV_DEFAULT_BUNDLEID` | NO |
 | Restore OC Symbols | `MONKEYDEV_RESTORE_SYMBOL` | NO |
 | Export OC Headers | `MONKEYDEV_CLASS_DUMP` | NO |
-| Reveal (Debug) | `MONKEYDEV_REVEAL` | NO |
+| UI Inspector (Debug) | `MONKEYDEV_UI_INSPECTOR` | None（可选 Reveal / Lookin） |
 
 默认使用项目 Bundle ID。保留原 Bundle ID 仍需要描述文件授权该 ID，开关不会绕过签名权限。最小运行时固定开启，不捆绑旧 Substrate/Cycript。
 
@@ -75,7 +75,7 @@ breakpoint set -n '-[YourClass yourMethod:]'
 
 将类名和 selector 换成目标 App 的实际方法。基础 UI/runtime 查询位于 `Tools/LLDBTools.h/.mm`，方法追踪位于 `Trace/MDMethodTrace.h/.mm`，均仅 Debug 可用。Trace 输出调用编号、线程号、嵌套深度、参数、返回值及同步方法耗时；它只支持明确的签名子集，不是任意 ABI 的通用 Hook。
 
-## 头文件与 Reveal
+## 头文件与视图检查
 
 开启 **Export OC Headers** 后，构建将主程序头文件导出到可见目录：
 
@@ -91,7 +91,11 @@ Reveal 使用用户本机 SDK，不再随 MonkeyDev 分发框架。先通过 Rev
 ~/Library/Application Support/Reveal/RevealServer/RevealServer.xcframework
 ```
 
-开启 **Reveal (Debug)** 后重新 Build/Run，允许 App 的本地网络访问，在 Reveal 选择运行中的 App；USB 连接已验证。查看层级时保持 App 继续运行，不停在断点上。Release 不接入 Reveal。
+选择 **UI Inspector (Debug) → Reveal** 后重新 Build/Run，允许 App 的本地网络访问，在 Reveal 选择运行中的 App；USB 连接已验证。查看层级时保持 App 继续运行，不停在断点上。Release 不接入 Reveal。
+
+LookinServer 1.2.8 的 arm64 动态 framework 已内置。安装 Lookin 桌面客户端后，选择 **UI Inspector (Debug) → Lookin**，Debug Build/Run，通过 USB 在 Lookin 打开运行中的 App，无需额外下载或编译 Server。自定义版本可通过 `MONKEYDEV_LOOKIN_SDK` 指定动态 framework 路径。Release 不接入。
+
+旧工程的 `MONKEYDEV_REVEAL=YES` 仍可用；显式设置 `MONKEYDEV_UI_INSPECTOR` 时以新选项为准。上游许可证、对应源码和版本说明保留在 `Librarys/Lookin/`。
 
 ## MonkeyPod
 

@@ -19,3 +19,4 @@
 - 4.8 更新 MonkeyApp 创建向导，支持选择注入、保留 Bundle ID、符号还原、头文件导出和 Reveal；适配 MonkeyPod 和新版 CocoaPods 工程集成
 - 4.9 适配越狱 Tweak 和命令行工具，支持 USB/IP 连接、免密/密码认证及自动安装
 - 4.10 Logos Tweak、CaptainHook Tweak、Command-line Tool 创建时可选择 rootless、rootful 或 roothide，适配 roothide 构建、打包和 USB 自动安装，提供按需使用的官方路径 SDK
+- 4.11 MonkeyApp 创建向导支持选择 None、Reveal 或 Lookin，Debug 按需集成视图检查 SDK，内置 LookinServer 1.2.8

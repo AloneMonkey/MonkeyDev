@@ -71,8 +71,8 @@ class InstallerTests(unittest.TestCase):
         receipt = plistlib.loads((self.prefix / 'install-receipt.plist').read_bytes())
         self.assertEqual(receipt['sourceMode'], 'local')
         self.assertEqual(receipt['installerVersion'], '3.0')
-        self.assertEqual(receipt['templatesRef'], '9d638522c66190c358df06db20a3cd1f8ccf1557')
-        for name in ['bin/monkeyparser', 'bin/class-dump', 'Tools/reveal.sh', 'Tools/info-plist.js', 'Tools/tweak-deploy.sh', 'Tools/cocoapods-compat.rb', 'Librarys/roothide/libsubstrate.tbd', 'Librarys/roothide/libroothide.tbd', 'Librarys/roothide/include/roothide.h', 'Librarys/roothide/include/module.modulemap', 'Librarys/roothide/LICENSE',
+        self.assertEqual(receipt['templatesRef'], 'b2dc8f7a40f33a13617959b98c61e799d1a2503c')
+        for name in ['bin/monkeyparser', 'bin/class-dump', 'Tools/reveal.sh', 'Tools/lookin.sh', 'Librarys/Lookin/LookinServer.framework/LookinServer', 'Librarys/Lookin/LookinServer.framework/Info.plist', 'Librarys/Lookin/LookinServer.framework/LICENSE', 'Librarys/Lookin/LookinServer-1.2.8-source.tar.gz', 'Tools/info-plist.js', 'Tools/tweak-deploy.sh', 'Tools/cocoapods-compat.rb', 'Librarys/roothide/libsubstrate.tbd', 'Librarys/roothide/libroothide.tbd', 'Librarys/roothide/include/roothide.h', 'Librarys/roothide/include/module.modulemap', 'Librarys/roothide/LICENSE',
                      'templates/MonkeyAppLibrary.xctemplate/Tools/LLDBTools.mm']:
             self.assertTrue((self.prefix / name).is_file(), name)
         checks = subprocess.run(['shasum', '-a', '256', '-c', 'install-files.sha256'], cwd=self.prefix, capture_output=True)
@@ -386,7 +386,7 @@ class InstallerTests(unittest.TestCase):
         self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
         for name in retired:
             self.assertFalse((self.prefix / name).exists(), name)
-        for name in ['Tools/pack.sh', 'Tools/mpack.sh', 'Tools/reveal.sh',
+        for name in ['Tools/pack.sh', 'Tools/mpack.sh', 'Tools/reveal.sh', 'Tools/lookin.sh', 'Librarys/Lookin/LookinServer.framework/LookinServer', 'Librarys/Lookin/LookinServer.framework/Info.plist', 'Librarys/Lookin/LookinServer.framework/LICENSE', 'Librarys/Lookin/LookinServer-1.2.8-source.tar.gz',
                      'templates/MonkeyAppLibrary.xctemplate/Trace/MDMethodTrace.mm']:
             self.assertTrue((self.prefix / name).is_file(), name)
         checks = subprocess.run(['shasum', '-a', '256', '-c', 'install-files.sha256'],

@@ -69,6 +69,9 @@ function checkApp(){
 	if [[ -n "$sourceApp" && ! -e "$sourceApp/Frameworks/libsubstrate.dylib" ]]; then
 		rm -f "$TARGET_APP_PATH/Frameworks/libsubstrate.dylib" || panic 1 "Cannot remove stale Substrate runtime"
 	fi
+	if [[ -n "$sourceApp" && ! -e "$sourceApp/Frameworks/LookinServer.framework" ]]; then
+		rm -rf "$TARGET_APP_PATH/Frameworks/LookinServer.framework" || panic 1 "Cannot remove stale Lookin framework"
+	fi
 	if [[ -n "$sourceApp" && ! -e "$sourceApp/Frameworks/RevealServer.framework" ]]; then
 		rm -rf "$TARGET_APP_PATH/Frameworks/RevealServer.framework" || panic 1 "Cannot remove stale Reveal framework"
 	fi
@@ -131,7 +134,7 @@ function copyOptionalFrameworks() {
 	local destination="$1" item
 	for item in "${FRAMEWORKS_TO_INJECT_PATH}"*; do
 		[[ -e "$item" ]] || continue
-		[[ "${item##*/}" != libsubstrate.dylib && "${item##*/}" != RevealServer.framework ]] || continue
+		[[ "${item##*/}" != libsubstrate.dylib && "${item##*/}" != RevealServer.framework && "${item##*/}" != LookinServer.framework ]] || continue
 		case "${item##*/}" in libcycript.*) continue ;; esac
 		cp -Rf "$item" "$destination/" || panic 1 "Cannot copy optional framework: $item"
 	done
@@ -382,6 +385,8 @@ function pack(){
 	# Integrate the user's current SDK into the build copy before embedded signing.
 	source "${MONKEYDEV_PATH}/Tools/reveal.sh" || panic 1 "Cannot load Reveal integration"
 	integrateReveal
+	source "${MONKEYDEV_PATH}/Tools/lookin.sh" || panic 1 "Cannot load Lookin integration"
+	integrateLookin
 	# Xcode processes the project plist after packaging. Publish the same metadata,
 	# retaining the previous project plist as a recovery copy.
 	mkdir -p "$plistStateDir" || panic 1 "Cannot create Info.plist state directory"
@@ -449,6 +454,14 @@ function signEmbeddedCode() {
 		/usr/bin/codesign --force --sign "$EXPANDED_CODE_SIGN_IDENTITY" --timestamp=none --generate-entitlement-der "$item" || panic 1 "Failed to sign framework: $item"
 	done < <(/usr/bin/find "$BUILD_APP_PATH" -depth -type d -name '*.framework' -print0)
 }
+
+# New projects choose one inspector; existing MONKEYDEV_REVEAL settings still work.
+case "${MONKEYDEV_UI_INSPECTOR:-}" in
+    '') ;;
+    None|Lookin) MONKEYDEV_REVEAL=NO ;;
+    Reveal) MONKEYDEV_REVEAL=YES ;;
+    *) panic 1 "Unknown MONKEYDEV_UI_INSPECTOR: $MONKEYDEV_UI_INSPECTOR" ;;
+esac
 
 if [[ "$1" == "codesign" ]]; then
 	if [[ ${MONKEYDEV_INSERT_DYLIB} == "NO" ]];then

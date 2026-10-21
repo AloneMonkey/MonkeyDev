@@ -1,7 +1,7 @@
 ---
 name: monkeydev
 description: >-
-  使用 MonkeyDev 在 Apple Silicon Mac 上创建 Xcode MonkeyApp、MonkeyPod 插件库、越狱 Logos/CaptainHook Tweak 和 iOS 命令行工具，完成插件开发、签名打包、USB/SSH 安装，以及 LLDB 调试、OC 头文件导出、符号还原、Reveal 检查和方法追踪。
+  使用 MonkeyDev 在 Apple Silicon Mac 上创建 Xcode MonkeyApp、MonkeyPod 插件库、越狱 Logos/CaptainHook Tweak 和 iOS 命令行工具，完成插件开发、签名打包、USB/SSH 安装，以及 LLDB 调试、OC 头文件导出、符号还原、Reveal/Lookin 视图检查和方法追踪。
 ---
 
 # MonkeyDev
@@ -101,7 +101,7 @@ sudo env MONKEYDEV_SOURCE_DIR="$PWD" /bin/bash bin/md-update
 | Keep Original Bundle ID | `MONKEYDEV_DEFAULT_BUNDLEID` | NO | YES 时保留输入 App 的 Bundle ID |
 | Restore OC Symbols | `MONKEYDEV_RESTORE_SYMBOL` | NO | 还原 OC 方法符号以便符号断点与调用栈分析 |
 | Export OC Headers | `MONKEYDEV_CLASS_DUMP` | NO | 导出主程序 OC 头文件 |
-| Reveal (Debug) | `MONKEYDEV_REVEAL` | NO | Debug 接入本机 Reveal SDK |
+| UI Inspector (Debug) | `MONKEYDEV_UI_INSPECTOR` | None | 可选 None / Reveal / Lookin，仅 Debug 接入 |
 
 通常保持 Keep Original Bundle ID 为 NO，使用新工程的标识。YES 不会绕过签名授权；profile 必须允许原 ID，第三方原始 ID 常无法由当前团队注册。若用户明确要求保留，应说明实际签名限制，不自行换掉该 ID。
 
@@ -191,7 +191,7 @@ expr -l objc++ -O -- (id)md_methods("YourClass")
 
 使用构建日志打印的路径。导出由独立 class-dump 完成，不需要另外执行 monkeyparser 的隐式导出。生成目录加入工程 `.gitignore`，不要加入 App target。输出供分析参考，不保证能当作完整 SDK 编译，也不还原纯 Swift 源码；无法解析的元数据可能产生警告或被跳过。
 
-## 6. Reveal
+## 6. Reveal / Lookin
 
 1. 用户在 Reveal 桌面应用中下载 Server SDK，默认位置为：
 
@@ -199,12 +199,22 @@ expr -l objc++ -O -- (id)md_methods("YourClass")
    ~/Library/Application Support/Reveal/RevealServer/RevealServer.xcframework
    ```
 
-2. 设置 App target 的 `MONKEYDEV_REVEAL=YES`，用 Debug 重新构建并运行。自定义 SDK 路径使用 `MONKEYDEV_REVEAL_SDK`，值是 `.xcframework` 的完整路径。
+2. 设置 App target 的 `MONKEYDEV_UI_INSPECTOR=Reveal`，用 Debug 重新构建并运行。自定义 SDK 路径使用 `MONKEYDEV_REVEAL_SDK`，值是 `.xcframework` 的完整路径。
 3. 允许 App 的本地网络访问，在 Reveal 选择该运行中的 App。USB 连接已验证；检查层级和 Refresh 时保持 App 运行，不能停在断点上。
 
 框架从用户本机 SDK 复制到构建副本，MonkeyDev 不捆绑新版 SDK。只在名为 Debug 的 iPhoneOS 配置接入，Release 忽略开关；开启但缺少 SDK 时构建会失败。
 
 若看不到 App，依次检查构建产物：`Frameworks/RevealServer.framework/RevealServer` 存在、主程序包含对应加载命令、最终 Info.plist 的 NSBonjourServices 包含 `_reveal._tcp`、本地网络权限已允许、签名和设备连接正常。若连接超时，先确认未暂停调试器，再重试 USB 连接。列表中出现 App 只说明发现成功，还需能读取完整层级并刷新。
+
+### Lookin
+
+选择 `MONKEYDEV_UI_INSPECTOR=Lookin`，只在 Debug iPhoneOS 构建中复制、注入并签名内置的 LookinServer 1.2.8，不依赖项目 dylib 的 Inject Dylib 开关。默认读取 `$(MonkeyDevPath)/Librarys/Lookin/LookinServer.framework`，自定义动态 framework 路径用 `MONKEYDEV_LOOKIN_SDK`。不接受静态库或模拟器 framework，不使用低于 1.0.6 的版本。
+
+用户只需安装 Lookin 桌面客户端，不需要另行准备 Server。项目构建不下载或编译 Server 源码，也不修改 Xcode.app 或 Lookin.app。上游许可证、完整对应源码归档、固定版本与构建说明随 SDK 保留在 `Librarys/Lookin/`。
+
+运行 App 后通过 USB 在 Lookin 客户端连接并读取、刷新视图层级；不需要为 Lookin 添加 Reveal 的 Bonjour 配置。测试时确认主程序的 LookinServer 加载命令、framework 签名以及实际层级读取，不能只以列表可见判断通过。SDK 保留上游许可证和固定源码来源。
+
+`None` 不注入视图检查工具，Release 忽略选项。未设置新选项的既有工程继续兼容 `MONKEYDEV_REVEAL=YES`；设置了新选项时以新选项为准，不同时自动注入 Reveal 和 Lookin。不覆盖输入 App 自带的同名 framework；启用时若冲突，应先关闭该选项或由用户处理输入依赖。
 
 ## 7. 方法追踪 Trace
 
