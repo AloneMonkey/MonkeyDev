@@ -1,0 +1,85 @@
+#!/bin/bash
+
+# MonkeyDev installer for Xcode 16+ through Xcode 27.
+# It wraps the community Xcode 16+ installer and fixes the Xcode 27
+# specification file locations before executing it as root.
+
+set -euo pipefail
+
+if [[ "$(id -u)" -ne 0 ]]; then
+  echo "Please run this script with sudo: sudo bash $0" >&2
+  exit 1
+fi
+
+MONKEYDEV_PATH=/opt/MonkeyDev
+USER_NAME=${SUDO_USER:-${USER:-}}
+if [[ -z "$USER_NAME" || "$USER_NAME" == root ]]; then
+  echo "Run through sudo from your normal macOS user account." >&2
+  exit 1
+fi
+USER_HOME=$(dscl . -read "/Users/$USER_NAME" NFSHomeDirectory | awk '{print $2}')
+if [[ -z "$USER_HOME" || ! -d "$USER_HOME" ]]; then
+  echo "Cannot determine the home directory for $USER_NAME." >&2
+  exit 1
+fi
+
+DEVELOPER_DIR=$(xcode-select -p)
+XCODE_APP_PATH=${DEVELOPER_DIR%/Contents/Developer}
+if [[ ! -d "$XCODE_APP_PATH" || ! -d "$DEVELOPER_DIR" ]]; then
+  echo "The selected Xcode is not valid: $DEVELOPER_DIR" >&2
+  exit 1
+fi
+export XCODE_APP_PATH
+
+echo "Using Xcode: $XCODE_APP_PATH"
+xcodebuild -version
+
+for profile in "$USER_HOME/.zshrc" "$USER_HOME/.bash_profile" "$USER_HOME/.bashrc" "$USER_HOME/.bash_login" "$USER_HOME/.profile"; do
+  if [[ -f "$profile" ]]; then
+    sed -i '' \
+      -e '/^export MonkeyDevPath=\/opt\/MonkeyDev$/d' \
+      -e '/^export MonkeyDevDeviceIP=$/d' \
+      -e '/^export PATH=\/opt\/MonkeyDev\/bin:\$PATH$/d' \
+      "$profile"
+  fi
+done
+
+SOURCE_URL='https://raw.githubusercontent.com/shadow-boy/MonkeyDev/5d16ef40a4871f3310cea45c197f077828fbe41d/bin/md-install_xcode16%2B'
+EXPECTED_SHA256=c78cf1ab1aa6346d2aec64ab91a2ebc9169b3f719244441b7b7103049831237b
+TEMP_DIR=$(mktemp -d "${TMPDIR:-/tmp}/monkeydev-install.XXXXXX")
+trap 'rm -rf "$TEMP_DIR"' EXIT
+SOURCE_FILE="$TEMP_DIR/md-install-xcode16-plus.sh"
+
+curl --fail --silent --show-error --location "$SOURCE_URL" --output "$SOURCE_FILE"
+ACTUAL_SHA256=$(shasum -a 256 "$SOURCE_FILE" | awk '{print $1}')
+if [[ "$ACTUAL_SHA256" != "$EXPECTED_SHA256" ]]; then
+  echo "Downloaded installer checksum mismatch." >&2
+  exit 1
+fi
+
+# The upstream script uses old Xcode paths and names. Keep its installation
+# logic, but make every Xcode lookup resolve against the selected app and one
+# deterministic file.
+XCODE_APP_QUOTED=$(printf '%s' "$XCODE_APP_PATH" | sed 's/[\\&|]/\\&/g')
+sed -i '' \
+  -e "s|/Applications/Xcode.app|$XCODE_APP_QUOTED|g" \
+  -e 's|-name "MacOSX Package Types.xcspec"|-name "PackageTypes.xcspec"|g' \
+  -e 's|-name "MacOSX Product Types.xcspec"|-name "ProductTypes.xcspec"|g' \
+  -e 's#find \(.*-name "Embedded-Device.xcspec"\)#find \1 | head -n 1#g' \
+  -e 's#find \(.*-name "PackageTypes.xcspec"\)#find \1 | head -n 1#g' \
+  -e 's#find \(.*-name "ProductTypes.xcspec"\)#find \1 | head -n 1#g' \
+  "$SOURCE_FILE"
+
+# Xcode 27 already keeps the command-line product specifications in its
+# shared ProductTypes.xcspec. The legacy MonkeyDev injection rewrites
+# Embedded-Device.xcspec (a BuildSettings specification) into an invalid
+# mixed object and makes Xcode abort while opening Build Settings. Remove
+# that legacy mutation block for current Xcode releases.
+sed -i '' '/#支持iphoneos command line tools/,/exit 0/c\
+# Xcode 27: Embedded-Device.xcspec is already a valid BuildSettings spec.\
+exit 0' "$SOURCE_FILE"
+
+bash "$SOURCE_FILE"
+
+echo
+echo "MonkeyDev installation completed. Restart Terminal or run: source \"$USER_HOME/.zshrc\""
